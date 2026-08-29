@@ -15,7 +15,8 @@ Videodan birebir kopyalanan "hedefe şut" oyunu (KICK LEGEND) + etrafındaki ara
 - `assets/images/` — videodan kesilmiş sprite'lar; `assets/fonts/` Titillium Web.
 
 ## Mekanik notları
-- Şut: bırakma noktası + hız payı = iniş; top parmağın ilk yönünde çıkar, inişe doğru bezier ile büker (falso). Uçuş 0.45 s; ekranda hızlı başlayıp yavaşlar (1-(1-z)²), küçülme z^1.56 (videodan ölçüldü).
+- Şut: nişan = kaydırma yönü (top kale çizgisine kadar o doğrultuda), yükseklik = güç (hız 0.55 + uzunluk 0.45). Falso: çıkışta yanal bileşen 1.9× abartılır, bezier ile inişe geri büker (videoda dx/dy oranı sona doğru dikleşiyor). Uçuş 0.45 s; ekranda hızlı başlayıp yavaşlar (1-(1-z)²), küçülme z^1.56.
+- Kale sonrası: top fileden aşağı düşer (0.32 s, sekme), kalenin dibinde kalır; 0.5 s sonra hedef küçülerek yok olur + "+30" + skor. Auta giden top görüş dışına uçar.
 - İsabet +30 (fever'da +60), file dalgası, popup. Iskalama/kaleci = 1 kalp, seri sıfırlanır. Direk/üst direk: top düşer, yerde hedefe denk gelirse sayılır.
 - 5 ardışık isabet → FEVER 10 s (altın top, parıltı, FEVER yazısı); iskalama veya süre → patlama halkası.
 - Kaleci 1: 30 puan; kaleci 2: 420 puan. Genlik kale genişliği + 110 px, periyot skorla kısalır.

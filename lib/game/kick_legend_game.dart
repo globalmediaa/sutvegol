@@ -148,8 +148,11 @@ class KickLegendGame extends FlameGame {
     final aim = miss
         ? Vector2(view.goalCenterX + (rng.nextBool() ? 1 : -1) * 350, view.groundY - 60)
         : target.position + jitter;
-    final dir = Vector2(rng.nextDouble() * 0.8 - 0.4, -1)..normalize();
-    kick(aim, dir);
+    final rGoal = kBallDiameter / 2 * view.ballGoalScale;
+    final trackEndY = view.groundY - rGoal;
+    final dir = Vector2(aim.x - ball.position.x, trackEndY - ball.position.y)..normalize();
+    final power = ((trackEndY - aim.y) / (view.goalHeight * 1.3)).clamp(0.0, 1.0);
+    kick(dir, power);
   }
 
   void schedule(double delay, void Function() fn) =>
@@ -169,10 +172,10 @@ class KickLegendGame extends FlameGame {
     }
   }
 
-  void kick(Vector2 landing, Vector2 initialDir) {
+  void kick(Vector2 dir, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
-    ball.kick(landing, initialDir);
+    ball.kick(dir, power);
   }
 
   void haptic(void Function() fn) {
@@ -191,14 +194,18 @@ class KickLegendGame extends FlameGame {
 
   // ---------------------------------------------------------------- sonuç
 
-  /// Top kale düzlemine ulaştı.
+  /// Top kale düzlemine ulaştı: sonuç burada belirlenir, görsel olarak top
+  /// fileden aşağı düşer; skor/hedef/kalp düşüş bittikten sonra işlenir.
+  bool _pendingHit = false;
+
   void resolveShot(Vector2 end, double r) {
     state = GameState.resolving;
     final g = view;
 
-    // Kaleci bloğu.
+    // Kaleci bloğu: top mankenin önüne düşer.
     if (keepers.any((k) => k.blocks(end, r))) {
-      _miss(end, r, inMouth: true);
+      _pendingHit = false;
+      ball.drop(end, Vector2(end.x + (rng.nextDouble() * 60 - 30), g.railY - r));
       return;
     }
 
@@ -216,20 +223,52 @@ class KickLegendGame extends FlameGame {
     }
 
     final inMouth = end.x > g.goalLeft && end.x < g.goalRight && end.y + r > g.crossbarY;
-    if (inMouth && target.visible && end.distanceTo(target.position) < target.radius + r * 0.55) {
-      _hit(end, r);
-    } else {
-      _miss(end, r, inMouth: inMouth);
+    if (!inMouth) {
+      // Auta / üstten: top görüş dışına gider.
+      _pendingHit = false;
+      final dir = Vector2(end.x - ball.position.x, -1).normalized();
+      ball.flyOut(Vector2(dir.x * 0.6, -1)..normalize());
+      return;
     }
+    _pendingHit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.55;
+    if (_pendingHit) scene.add(NetRipple(target.position.clone()));
+    final rNet = kBallDiameter / 2 * g.ballGoalScale * 0.85;
+    ball.settleInNet(end, Vector2(end.x, g.groundY + 18 - rNet), g.ballGoalScale * 0.85);
   }
 
-  /// Direkten düşen top yere geldi.
+  /// Direkten/kaleciden düşen top yere geldi.
   void resolveDrop(Vector2 end, double r) {
-    if (target.visible && end.distanceTo(target.position) < target.radius + r * 0.6) {
-      _hit(end, r);
-    } else {
-      _miss(end, r, inMouth: true);
-    }
+    final hit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.6;
+    scene.add(RestingBall(end.clone(), r * 2 / kBallDiameter));
+    schedule(0.45, () => hit ? _hit(end, r) : _miss(end, r));
+    _scheduleNextBall(0.6);
+  }
+
+  /// File içinde yere oturdu: dinlenen top; kısa süre sonra skor/hedef.
+  void onBallSettled(Vector2 end, double r) {
+    scene.add(RestingBall(end.clone(), r * 2 / kBallDiameter));
+    final hit = _pendingHit;
+    _pendingHit = false;
+    schedule(0.5, () => hit ? _hit(end, r) : _miss(end, r));
+    _scheduleNextBall(0.55);
+  }
+
+  /// Auta giden top.
+  void onBallOut() {
+    schedule(0.3, () => _miss(ball.position, 0));
+    _scheduleNextBall(0.4);
+  }
+
+  void _scheduleNextBall(double delay) {
+    schedule(delay, () {
+      if (lives == 0) return;
+      if (rng.nextDouble() < 0.4) {
+        switchView(view == kWide ? kZoom : kWide);
+        schedule(0.45, ball.enter);
+      } else {
+        ball.enter();
+      }
+    });
   }
 
   void _hit(Vector2 end, double r) {
@@ -241,29 +280,25 @@ class KickLegendGame extends FlameGame {
       _prefs?.setInt('best', best);
     }
     scoreboard.flashScore();
-    scene.add(NetRipple(target.position.clone()));
     scene.add(ScorePopup(
       target.position.clone(),
       '+$gain',
       color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
     ));
-    target.hide();
+    target.shrinkAway();
     haptic(HapticFeedback.mediumImpact);
-    schedule(0.55, () => target.spawn());
+    schedule(0.7, () => target.spawn());
 
     if (!fever && streak >= feverStreak) startFever();
-
-    _restBall(end, r);
     _afterShot();
   }
 
-  void _miss(Vector2 end, double r, {required bool inMouth}) {
+  void _miss(Vector2 end, double r) {
     streak = 0;
     lives = max(0, lives - 1);
     scoreboard.flashHeart();
     haptic(HapticFeedback.lightImpact);
     if (fever) endFever();
-    if (inMouth) _restBall(end, r);
 
     if (lives == 0) {
       schedule(0.7, () {
@@ -275,24 +310,9 @@ class KickLegendGame extends FlameGame {
     _afterShot();
   }
 
-  void _restBall(Vector2 end, double r) {
-    final g = view;
-    final restX = end.x.clamp(g.goalLeft + r, g.goalRight - r);
-    scene.add(RestingBall(Vector2(restX, g.groundY - r), r * 2 / kBallDiameter));
-  }
-
   void _afterShot() {
     if (!keepers[0].active && score >= 30) schedule(0.3, keepers[0].activate);
     if (!keepers[1].active && score >= 420) schedule(0.3, keepers[1].activate);
-
-    schedule(0.5, () {
-      if (rng.nextDouble() < 0.4) {
-        switchView(view == kWide ? kZoom : kWide);
-        schedule(0.45, ball.enter);
-      } else {
-        ball.enter();
-      }
-    });
   }
 
   void startFever() {

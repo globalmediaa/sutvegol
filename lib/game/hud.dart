@@ -123,7 +123,7 @@ class InputLayer extends PositionComponent
     final vec = end.$1 - start;
     if (vec.y > -60 || vec.length < 80) return;
 
-    // Son ~90 ms'nin hızı (px/s).
+    // Son ~90 ms'nin hızı (px/s) → güç; uzunluk da katkı verir.
     var early = _samples.first;
     for (final s in _samples) {
       if (end.$2 - s.$2 <= 90) {
@@ -134,22 +134,12 @@ class InputLayer extends PositionComponent
     final dtMs = max(1, end.$2 - early.$2);
     final vel = (end.$1 - early.$1) / (dtMs / 1000);
     final speed = vel.length.clamp(0, 9000).toDouble();
-    final landing = end.$1 + (speed > 0 ? vel.normalized() * speed * 0.085 : Vector2.zero());
+    final speedNorm = ((speed - 700) / 2600).clamp(0.0, 1.0);
+    final lenNorm = ((vec.length - 120) / 800).clamp(0.0, 1.0);
+    final power = 0.55 * speedNorm + 0.45 * lenNorm;
 
-    // Falso: parmağın ilk yönü (yolun ilk %30'u). Top bu yönde çıkar,
-    // inişe doğru büker.
-    final total = vec.length;
-    var acc = 0.0;
-    var initial = vec.normalized();
-    for (var i = 1; i < _samples.length; i++) {
-      acc += (_samples[i].$1 - _samples[i - 1].$1).length;
-      if (acc >= total * 0.3) {
-        final d = _samples[i].$1 - start;
-        if (d.length > 20) initial = d.normalized();
-        break;
-      }
-    }
-    game.kick(landing, initial);
+    // Nişan: kaydırma yönü (başlangıç → bırakma).
+    game.kick(vec.normalized(), power);
   }
 }
 

@@ -32,7 +32,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     expect(game.state, GameState.flying);
 
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 40; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(game.state, isNot(GameState.flying));

@@ -54,7 +54,7 @@ class Background extends PositionComponent with HasGameReference<KickLegendGame>
   }
 }
 
-enum BallPhase { hidden, entering, idle, flying, dropping }
+enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 
 /// Oyuncunun topu: soldan yuvarlanarak gelir, bekler, fırlatılır, kaleye
 /// küçülerek (hafif muz eğrisiyle) uçar; direğe çarparsa düşer.
@@ -106,31 +106,52 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     _height = 0;
   }
 
-  /// [landing]: hedeflenen iniş noktası (ekran). [initialDir]: parmağın ilk
-  /// yönü (birim vektör) — top o yönde çıkıp inişe doğru bükülür (falso).
-  void kick(Vector2 landing, Vector2 initialDir) {
+  /// [dir]: kaydırma yönü (birim, y<0), [power]: 0..1 (hız + uzunluk).
+  /// Nişan yönle alınır: top kale çizgisine kadar o doğrultuda gider.
+  /// Falso: çıkışta yanal bileşen abartılır, inişe doğru geri büker.
+  void kick(Vector2 dir, double power) {
     final g = game.view;
     phase = BallPhase.flying;
     _t = 0;
     _start = position.clone();
     _startScale = scale.x;
     final trackEndY = g.groundY - goalRadius;
-    _xEnd = landing.x.clamp(-60, kWorldW + 60);
-    _hEnd = max(0, trackEndY - landing.y);
-    _lob = 60 + _hEnd * 0.1;
+    final d = dir.clone()..normalize();
+    if (d.y > -0.25) d.setValues(d.x.sign * 0.97, -0.25);
+    final dy = _start.y - trackEndY;
+    _xEnd = (_start.x + d.x / (-d.y) * dy).clamp(-220.0, kWorldW + 220.0);
+    _hEnd = power.clamp(0, 1) * g.goalHeight * 1.3;
+    _lob = 50 + _hEnd * 0.1;
     final end = Vector2(_xEnd, trackEndY);
     final chord = end - _start;
-    var dir = initialDir.clone();
-    if (dir.length2 < 0.01) dir = chord.normalized();
-    dir.normalize();
-    if (dir.y > -0.2) dir = Vector2(dir.x.sign * 0.45, -0.9)..normalize(); // en az yukarı
-    _ctrl = _start + dir * (chord.length * 0.48);
-    // Kontrol noktası çok yana kaçmasın (aşırı muz).
-    final lateral = (_ctrl.x - (_start.x + end.x) / 2).clamp(-320.0, 320.0);
-    _ctrl.x = (_start.x + end.x) / 2 + lateral;
-    final bend = _ctrl.x - (_start.x + end.x) / 2;
-    _spin = 12 + (_xEnd - _start.x).sign * 5 + bend.sign * 8;
+    final wide = Vector2(d.x * 1.9, d.y)..normalize();
+    _ctrl = _start + wide * (chord.length * 0.5);
+    final midX = (_start.x + end.x) / 2;
+    _ctrl.x = midX + (_ctrl.x - midX).clamp(-360.0, 360.0);
+    final bend = _ctrl.x - midX;
+    _spin = 16 + bend.sign * 10;
   }
+
+  /// Fileye/hedefe çarptıktan sonra ağ boyunca yere düşüş (derine küçülerek).
+  void settleInNet(Vector2 from, Vector2 to, double toScale) {
+    phase = BallPhase.netting;
+    _t = 0;
+    _dropFrom = from.clone();
+    _dropTo = to.clone();
+    _netStartScale = scale.x;
+    _netEndScale = toScale;
+  }
+
+  /// Kale dışına / üstünden: görüş dışına devam eder.
+  void flyOut(Vector2 dir) {
+    phase = BallPhase.out;
+    _t = 0;
+    _dropFrom = position.clone();
+    _dropTo = position + dir * 500;
+  }
+
+  double _netStartScale = 0.2;
+  double _netEndScale = 0.17;
 
   /// Direk/üst direkten yere düşme.
   void drop(Vector2 from, Vector2 to) {
@@ -183,6 +204,38 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
           final r = radius;
           phase = BallPhase.hidden;
           game.resolveShot(end, r);
+        }
+      case BallPhase.netting:
+        _t += dt;
+        const dur = 0.32;
+        final k = (_t / dur).clamp(0.0, 1.0);
+        final fall = k * k;
+        final bounce = k > 0.78 ? sin((k - 0.78) / 0.22 * pi) * 14 : 0.0;
+        position = Vector2(
+          _lerp(_dropFrom.x, _dropTo.x, k),
+          _lerp(_dropFrom.y, _dropTo.y, fall) - bounce,
+        );
+        scale = Vector2.all(_lerp(_netStartScale, _netEndScale, k));
+        _groundY = _dropTo.y + radius;
+        _height = _groundY - position.y;
+        _angle += 9 * dt;
+        if (k >= 1) {
+          final end = position.clone();
+          final r = radius;
+          phase = BallPhase.hidden;
+          game.onBallSettled(end, r);
+        }
+      case BallPhase.out:
+        _t += dt;
+        final k = (_t / 0.3).clamp(0.0, 1.0);
+        position = Vector2(_lerp(_dropFrom.x, _dropTo.x, k), _lerp(_dropFrom.y, _dropTo.y, k));
+        scale = Vector2.all(_lerp(_startScale * 0.2, _startScale * 0.12, k));
+        _groundY = position.y + 200;
+        _height = 200;
+        _angle += 9 * dt;
+        if (k >= 1) {
+          phase = BallPhase.hidden;
+          game.onBallOut();
         }
       case BallPhase.dropping:
         _t += dt;
@@ -260,21 +313,6 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     }
     canvas.restore();
 
-    // Kaydırma ipucu: topun sağ üstünde sabit, açık "C" halka.
-    if (phase == BallPhase.idle) {
-      final c = Offset(radius * 1.23, -radius * 1.18);
-      canvas.drawArc(
-        Rect.fromCircle(center: c, radius: 19),
-        2.95, // boşluk sol-altta
-        5.0,
-        false,
-        Paint()
-          ..color = const Color(0xFFFFFFFF)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..strokeCap = StrokeCap.round,
-      );
-    }
     canvas.restore();
   }
 }
@@ -314,21 +352,38 @@ class TargetComp extends PositionComponent with HasGameReference<KickLegendGame>
     position = p;
     scale = Vector2.all(_viewScale);
     visible = true;
+    _shrink = -1;
     _pop = immediate ? 1 : 0;
   }
 
   void hide() => visible = false;
 
+  double _shrink = -1; // >=0: küçülerek kaybolma animasyonu
+
+  /// Vuruş kaydedilince hedef küçülerek yok olur.
+  void shrinkAway() {
+    if (!visible) return;
+    _shrink = 0;
+  }
+
   @override
   void update(double dt) {
     if (visible && _pop < 1) _pop = min(1, _pop + dt / 0.18);
+    if (_shrink >= 0) {
+      _shrink += dt / 0.16;
+      if (_shrink >= 1) {
+        _shrink = -1;
+        visible = false;
+      }
+    }
   }
 
   @override
   void render(Canvas canvas) {
     if (!visible) return;
     final k = _easeOut(_pop);
-    final s = 0.6 + 0.4 * k + (k < 1 ? 0.12 * sin(k * pi) : 0);
+    var s = 0.6 + 0.4 * k + (k < 1 ? 0.12 * sin(k * pi) : 0);
+    if (_shrink >= 0) s *= 1 - _shrink;
     canvas.save();
     canvas.translate(size.x / 2, size.y / 2);
     canvas.scale(s);
