@@ -8,18 +8,20 @@ import 'kick_legend_game.dart';
 
 double _easeInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
 double _easeOutBack(double t) {
-  const c1 = 1.70158;
+  const c1 = 1.2;
   const c3 = c1 + 1;
   return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2);
 }
 
-/// Açılış: gökyüzü + soldan kayan KICK LEGEND logosu, sonra sahaya pan.
+/// Açılış: gökyüzü aşağı akar, KICK LEGEND logosu alttan yükselip ortaya
+/// oturur, ardından kamera sahaya iner.
 class SplashLayer extends PositionComponent with HasGameReference<KickLegendGame> {
   SplashLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 50);
 
-  static const double logoIn = 0.45;
-  static const double hold = 1.6;
+  static const double logoIn = 0.55;
+  static const double hold = 1.5;
   static const double pan = 0.9;
+  static const double cloudSpeed = 70; // px/s, aşağı
 
   late Sprite _bg;
   late Sprite _logo;
@@ -51,9 +53,13 @@ class SplashLayer extends PositionComponent with HasGameReference<KickLegendGame
 
   @override
   void render(Canvas canvas) {
-    _bg.render(canvas, size: size);
+    // Gökyüzü yavaşça aşağı akar (kamera yukarı bakıyor hissi).
+    final off = min(0.0, -140 + _t * cloudSpeed);
+    _bg.render(canvas, position: Vector2(0, off), size: Vector2(kWorldW, kWorldH + 140));
+
+    // Logo: alttan yükselir, hafif taşma ile oturur.
     final k = _easeOutBack((_t / logoIn).clamp(0, 1));
-    final x = -1300 + (48 + 1300) * k;
-    _logo.render(canvas, position: Vector2(x, 740), size: Vector2(1192, 570));
+    final y = 740 + (kWorldH - 740) * (1 - k);
+    _logo.render(canvas, position: Vector2(48, y), size: Vector2(1192, 570));
   }
 }

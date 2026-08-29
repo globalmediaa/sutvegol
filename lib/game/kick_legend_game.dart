@@ -12,6 +12,9 @@ import 'splash.dart';
 
 enum GameState { splash, idle, flying, resolving, paused, gameOver }
 
+/// Geliştirme: `--dart-define=AUTOPLAY=true` ile oyun kendi kendine şut atar.
+const bool kAutoplay = bool.fromEnvironment('AUTOPLAY');
+
 class _Scheduled {
   _Scheduled(this.at, this.fn);
   final double at;
@@ -89,12 +92,38 @@ class KickLegendGame extends FlameGame {
     if (state == GameState.paused) return; // perde açıkken sahne donar
     super.update(dt);
     _clock += dt;
+    if (kAutoplay) _autoplay(dt);
     if (_queue.isEmpty) return;
     final due = _queue.where((s) => s.at <= _clock).toList();
     _queue.removeWhere((s) => s.at <= _clock);
     for (final s in due) {
       s.fn();
     }
+  }
+
+  double _autoIdle = 0;
+  void _autoplay(double dt) {
+    if (state == GameState.gameOver) {
+      _autoIdle += dt;
+      if (_autoIdle > 2.5) {
+        _autoIdle = 0;
+        restart();
+      }
+      return;
+    }
+    if (state != GameState.idle) {
+      _autoIdle = 0;
+      return;
+    }
+    _autoIdle += dt;
+    if (_autoIdle < 0.9) return;
+    _autoIdle = 0;
+    final miss = rng.nextDouble() < 0.3;
+    final jitter = Vector2(rng.nextDouble() * 60 - 30, rng.nextDouble() * 60 - 30);
+    final aim = miss
+        ? Vector2(view.goalCenterX + (rng.nextBool() ? 1 : -1) * 350, view.groundY - 60)
+        : target.position + jitter;
+    kick(aim);
   }
 
   void schedule(double delay, void Function() fn) =>
