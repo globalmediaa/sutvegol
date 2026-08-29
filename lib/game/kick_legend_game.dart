@@ -16,8 +16,9 @@ enum GameState { splash, idle, flying, resolving, paused, gameOver }
 /// Geliştirme: `--dart-define=AUTOPLAY=true` ile oyun kendi kendine şut atar.
 const bool kAutoplay = bool.fromEnvironment('AUTOPLAY');
 
-/// Flutter tarafındaki game over perdesinin overlay anahtarı.
+/// Flutter tarafındaki perdelerin overlay anahtarları.
 const String kGameOverOverlay = 'gameOver';
+const String kPauseOverlay = 'pause';
 
 class _Scheduled {
   _Scheduled(this.at, this.fn);
@@ -57,8 +58,11 @@ class KickLegendGame extends FlameGame {
   late final Scoreboard scoreboard;
   late final FeverOverlay feverOverlay;
   late final InputLayer input;
-  late final OverlayLayer overlay;
   SplashLayer? splash;
+
+  /// Ayarlar (pause menüsü): ses ve titreşim.
+  bool soundOn = true;
+  bool hapticsOn = true;
 
   SharedPreferences? _prefs;
   double _clock = 0;
@@ -82,6 +86,8 @@ class KickLegendGame extends FlameGame {
     ]);
     _prefs = await SharedPreferences.getInstance();
     best = _prefs?.getInt('best') ?? 0;
+    soundOn = _prefs?.getBool('sound') ?? true;
+    hapticsOn = _prefs?.getBool('haptics') ?? true;
 
     scene = SceneRoot()..position = Vector2(0, kWorldH);
     background = Background();
@@ -96,9 +102,8 @@ class KickLegendGame extends FlameGame {
     scene.addAll([background, target, ...keepers, ball, feverOverlay, scoreboard]);
 
     input = InputLayer();
-    overlay = OverlayLayer();
     splash = SplashLayer();
-    world.addAll([scene, input, overlay, splash!]);
+    world.addAll([scene, input, splash!]);
   }
 
   // ---------------------------------------------------------------- akış
@@ -143,7 +148,8 @@ class KickLegendGame extends FlameGame {
     final aim = miss
         ? Vector2(view.goalCenterX + (rng.nextBool() ? 1 : -1) * 350, view.groundY - 60)
         : target.position + jitter;
-    kick(aim, rng.nextDouble() * 300 - 150);
+    final dir = Vector2(rng.nextDouble() * 0.8 - 0.4, -1)..normalize();
+    kick(aim, dir);
   }
 
   void schedule(double delay, void Function() fn) =>
@@ -163,10 +169,24 @@ class KickLegendGame extends FlameGame {
     }
   }
 
-  void kick(Vector2 landing, double curve) {
+  void kick(Vector2 landing, Vector2 initialDir) {
     if (state != GameState.idle) return;
     state = GameState.flying;
-    ball.kick(landing, curve);
+    ball.kick(landing, initialDir);
+  }
+
+  void haptic(void Function() fn) {
+    if (hapticsOn) fn();
+  }
+
+  void setSound(bool v) {
+    soundOn = v;
+    _prefs?.setBool('sound', v);
+  }
+
+  void setHaptics(bool v) {
+    hapticsOn = v;
+    _prefs?.setBool('haptics', v);
   }
 
   // ---------------------------------------------------------------- sonuç
@@ -228,7 +248,7 @@ class KickLegendGame extends FlameGame {
       color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
     ));
     target.hide();
-    HapticFeedback.mediumImpact();
+    haptic(HapticFeedback.mediumImpact);
     schedule(0.55, () => target.spawn());
 
     if (!fever && streak >= feverStreak) startFever();
@@ -241,7 +261,7 @@ class KickLegendGame extends FlameGame {
     streak = 0;
     lives = max(0, lives - 1);
     scoreboard.flashHeart();
-    HapticFeedback.lightImpact();
+    haptic(HapticFeedback.lightImpact);
     if (fever) endFever();
     if (inMouth) _restBall(end, r);
 
@@ -278,7 +298,7 @@ class KickLegendGame extends FlameGame {
   void startFever() {
     fever = true;
     feverTime = feverDuration;
-    HapticFeedback.heavyImpact();
+    haptic(HapticFeedback.heavyImpact);
   }
 
   void endFever() {
@@ -303,23 +323,23 @@ class KickLegendGame extends FlameGame {
     if (state == GameState.splash || state == GameState.paused || state == GameState.gameOver) return;
     _stateBeforePause = state;
     state = GameState.paused;
-    overlay.showPaused();
+    overlays.add(kPauseOverlay);
   }
 
   void resume() {
     if (state != GameState.paused) return;
-    overlay.hide();
+    overlays.remove(kPauseOverlay);
     state = _stateBeforePause ?? GameState.idle;
   }
 
   void restart() {
     _queue.clear();
     overlays.remove(kGameOverOverlay);
+    overlays.remove(kPauseOverlay);
     score = 0;
     lives = 3;
     streak = 0;
     fever = false;
-    overlay.hide();
     scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
     for (final k in keepers) {
       k.deactivate();

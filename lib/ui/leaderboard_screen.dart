@@ -44,24 +44,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               decoration: const BoxDecoration(
                 gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [KL.bodyTop, KL.bodyBottom]),
               ),
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 30),
+              child: Column(
                 children: [
+                  // Logo ve "You" satırı sabit; podyum + liste kayar.
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Image.asset('assets/images/logo.png', width: 240, height: 115, fit: BoxFit.contain),
                   ),
                   _row(context, rank: myRank, avatar: 'avatar_you.png', name: 'You', handle: '($kMeHandle)', pts: widget.myScore, highlight: true, entry: const LbEntry('You', 0, 'avatar_you.png')),
-                  if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: _Loading(),
-                    )
-                  else ...[
-                    _Podium(list: list, onTap: (e) => showProfileDialog(context, e)),
-                    for (var i = 3; i < list.length; i++)
-                      _row(context, rank: rankAt(list, i), avatar: list[i].avatar, name: list[i].name, pts: list[i].pts, entry: list[i]),
-                  ],
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 30),
+                      children: [
+                        if (_loading)
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: _Loading())
+                        else ...[
+                          _Podium(list: list, onTap: (e) => showProfileDialog(context, e)),
+                          for (var i = 3; i < list.length; i++)
+                            _row(context, rank: rankAt(list, i), avatar: list[i].avatar, name: list[i].name, pts: list[i].pts, entry: list[i]),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

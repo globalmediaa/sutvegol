@@ -7,6 +7,7 @@ import 'ui/game_over_overlay.dart';
 import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
 import 'ui/mock_data.dart';
+import 'ui/pause_overlay.dart';
 import 'ui/profile_dialog.dart';
 
 /// Geliştirme: `--dart-define=UI_PREVIEW=leaderboard|profile` ile ekranı doğrudan açar.
@@ -78,6 +79,7 @@ class _GameScreenState extends State<GameScreen> {
           game: _game,
           overlayBuilderMap: {
             kGameOverOverlay: (context, game) => GameOverOverlay(game: game),
+            kPauseOverlay: (context, game) => PauseOverlay(game: game),
           },
         ),
       );

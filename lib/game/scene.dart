@@ -61,7 +61,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping }
 class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
-  static const double flightDur = 0.36;
+  static const double flightDur = 0.45;
   static const double enterDur = 0.55;
   static const double dropDur = 0.45;
 
@@ -76,7 +76,7 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   late double _xEnd;
   late double _hEnd;
   late double _lob;
-  double _curve = 0;
+  late Vector2 _ctrl; // bezier kontrol noktası (parmağın ilk yönü)
 
   // Düşme (direk/üst direk).
   late Vector2 _dropFrom;
@@ -106,8 +106,9 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     _height = 0;
   }
 
-  /// [landing]: hedeflenen iniş noktası (ekran), [curve]: yanal eğri (px, +sağ).
-  void kick(Vector2 landing, double curve) {
+  /// [landing]: hedeflenen iniş noktası (ekran). [initialDir]: parmağın ilk
+  /// yönü (birim vektör) — top o yönde çıkıp inişe doğru bükülür (falso).
+  void kick(Vector2 landing, Vector2 initialDir) {
     final g = game.view;
     phase = BallPhase.flying;
     _t = 0;
@@ -116,9 +117,19 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     final trackEndY = g.groundY - goalRadius;
     _xEnd = landing.x.clamp(-60, kWorldW + 60);
     _hEnd = max(0, trackEndY - landing.y);
-    _lob = 80 + _hEnd * 0.12;
-    _curve = curve.clamp(-260, 260);
-    _spin = 14 + (_xEnd - _start.x).sign * 6 + _curve.sign * 6;
+    _lob = 60 + _hEnd * 0.1;
+    final end = Vector2(_xEnd, trackEndY);
+    final chord = end - _start;
+    var dir = initialDir.clone();
+    if (dir.length2 < 0.01) dir = chord.normalized();
+    dir.normalize();
+    if (dir.y > -0.2) dir = Vector2(dir.x.sign * 0.45, -0.9)..normalize(); // en az yukarı
+    _ctrl = _start + dir * (chord.length * 0.48);
+    // Kontrol noktası çok yana kaçmasın (aşırı muz).
+    final lateral = (_ctrl.x - (_start.x + end.x) / 2).clamp(-320.0, 320.0);
+    _ctrl.x = (_start.x + end.x) / 2 + lateral;
+    final bend = _ctrl.x - (_start.x + end.x) / 2;
+    _spin = 12 + (_xEnd - _start.x).sign * 5 + bend.sign * 8;
   }
 
   /// Direk/üst direkten yere düşme.
@@ -155,13 +166,16 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
         _t += dt;
         final z = (_t / flightDur).clamp(0.0, 1.0);
         final trackEndY = g.groundY - goalRadius;
-        // Yer izi: x'te quadratic bezier (muz eğrisi), y'de doğrusal.
-        final midX = (_start.x + _xEnd) / 2 + _curve;
-        final u = 1 - z;
-        final gx = u * u * _start.x + 2 * u * z * midX + z * z * _xEnd;
-        _groundY = _lerp(_start.y, trackEndY, z);
-        _height = _hEnd * z + _lob * sin(pi * z);
-        scale = Vector2.all(_lerp(_startScale, g.ballGoalScale, z));
+        // Perspektif: ekranda hızlı başlar, kaleye yaklaşırken yavaşlar;
+        // top başta yavaş, sonda hızlı küçülür (videodan ölçüldü).
+        final sProg = 1 - (1 - z) * (1 - z);
+        final u = 1 - sProg;
+        final gx = u * u * _start.x + 2 * u * sProg * _ctrl.x + sProg * sProg * _xEnd;
+        final gy = u * u * _start.y + 2 * u * sProg * _ctrl.y + sProg * sProg * trackEndY;
+        _groundY = gy;
+        _height = _hEnd * sProg + _lob * sin(pi * sProg);
+        final shrink = pow(z, 1.56).toDouble();
+        scale = Vector2.all(_lerp(_startScale, g.ballGoalScale, shrink));
         position = Vector2(gx, _groundY - _height);
         _angle += _spin * dt;
         if (z >= 1) {

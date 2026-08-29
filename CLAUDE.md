@@ -8,14 +8,14 @@ Videodan birebir kopyalanan "hedefe şut" oyunu (KICK LEGEND) + etrafındaki ara
 - `lib/game/kick_legend_game.dart` — durum makinesi, skor/can, seri + FEVER, 2 kaleci, direk sekmesi, kamera geçişi, zamanlayıcı.
 - `lib/game/scene.dart` — Background, Ball (soldan yuvarlanma / bezier eğrili uçuş / düşme), TargetComp, Keeper, RestingBall, NetRipple, ScorePopup.
 - `lib/game/fever.dart` — FEVER parıltı katmanı (bokeh, yıldız, altın yazı) ve bitiş halkası.
-- `lib/game/hud.dart` — tabela (led.dart ile), kalpler, InputLayer (swipe → iniş noktası + falso), pause perdesi.
+- `lib/game/hud.dart` — tabela (led.dart ile), kalpler, InputLayer (swipe → iniş noktası + parmağın ilk yönü = falso).
 - `lib/game/led.dart` — 7-segment çizim; hem Flame hem Flutter tarafı kullanır.
 - `lib/game/splash.dart` — gök + Loading spinner → logo alttan yükselir → sahaya pan.
-- `lib/ui/` — game_over_overlay (kart, sayaçlı skor, sıra rozeti, tekrar), leaderboard_screen (sekmeler, podyum, liste), profile_dialog (saha kartı, rozetler), loading_screen (kırmızı), mock_data (yerel örnek liste), theme.
+- `lib/ui/` — game_over_overlay (kart, sayaçlı skor, sıra rozeti, tekrar), pause_overlay (ses/titreşim toggle, çıkış+yeniden başlat, Play), leaderboard_screen (sekmeler, sabit logo+You, podyum, liste), profile_dialog (saha/karatahta kartı, beğeni, 5'li rozet carousel'i), loading_screen (kırmızı), mock_data (yerel liste + 37 rozet), theme.
 - `assets/images/` — videodan kesilmiş sprite'lar; `assets/fonts/` Titillium Web.
 
 ## Mekanik notları
-- Şut: bırakma noktası + hız payı = iniş; parmak yolunun düz çizgiden sapması → yanal bezier eğrisi (falso). Uçuş 0.36 s.
+- Şut: bırakma noktası + hız payı = iniş; top parmağın ilk yönünde çıkar, inişe doğru bezier ile büker (falso). Uçuş 0.45 s; ekranda hızlı başlayıp yavaşlar (1-(1-z)²), küçülme z^1.56 (videodan ölçüldü).
 - İsabet +30 (fever'da +60), file dalgası, popup. Iskalama/kaleci = 1 kalp, seri sıfırlanır. Direk/üst direk: top düşer, yerde hedefe denk gelirse sayılır.
 - 5 ardışık isabet → FEVER 10 s (altın top, parıltı, FEVER yazısı); iskalama veya süre → patlama halkası.
 - Kaleci 1: 30 puan; kaleci 2: 420 puan. Genlik kale genişliği + 110 px, periyot skorla kısalır.

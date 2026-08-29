@@ -3,13 +3,10 @@ import 'dart:ui' hide TextStyle;
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
-import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'geometry.dart';
 import 'kick_legend_game.dart';
 import 'led.dart';
-
-double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 
 /// 7-segment LED rakamlar + kalpler (arka plandaki tabela üzerine çizilir).
 class Scoreboard extends PositionComponent with HasGameReference<KickLegendGame> {
@@ -139,76 +136,20 @@ class InputLayer extends PositionComponent
     final speed = vel.length.clamp(0, 9000).toDouble();
     final landing = end.$1 + (speed > 0 ? vel.normalized() * speed * 0.085 : Vector2.zero());
 
-    // Falso: parmak yolunun düz çizgiden en büyük işaretli sapması.
-    final chord = vec;
-    final len = chord.length;
-    var maxDev = 0.0;
-    for (final s in _samples) {
-      final d = s.$1 - start;
-      final cross = (d.x * chord.y - d.y * chord.x) / len; // + = sağa bombe
-      if (cross.abs() > maxDev.abs()) maxDev = cross;
+    // Falso: parmağın ilk yönü (yolun ilk %30'u). Top bu yönde çıkar,
+    // inişe doğru büker.
+    final total = vec.length;
+    var acc = 0.0;
+    var initial = vec.normalized();
+    for (var i = 1; i < _samples.length; i++) {
+      acc += (_samples[i].$1 - _samples[i - 1].$1).length;
+      if (acc >= total * 0.3) {
+        final d = _samples[i].$1 - start;
+        if (d.length > 20) initial = d.normalized();
+        break;
+      }
     }
-    // Ekranda yukarı giden kaydırmada "sağa bombe" = cross negatif; işaret düzelt.
-    final curve = -maxDev * 1.4;
-    game.kick(landing, curve);
+    game.kick(landing, initial);
   }
 }
 
-/// Pause perdesi (game over Flutter tarafında).
-class OverlayLayer extends PositionComponent
-    with HasGameReference<KickLegendGame>, TapCallbacks {
-  OverlayLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 60);
-
-  bool _visible = false;
-  double _t = 0;
-
-  static final _title = TextPaint(
-    style: const TextStyle(
-      fontSize: 150,
-      fontWeight: FontWeight.w700,
-      fontFamily: 'TitilliumWeb',
-      color: Color(0xFFFFB13B),
-      letterSpacing: 4,
-    ),
-  );
-  static final _hint = TextPaint(
-    style: const TextStyle(
-      fontSize: 48,
-      fontWeight: FontWeight.w600,
-      fontFamily: 'TitilliumWeb',
-      color: Color(0xCCFFFFFF),
-    ),
-  );
-
-  void showPaused() {
-    _visible = true;
-    _t = 0;
-  }
-
-  void hide() => _visible = false;
-
-  @override
-  bool containsLocalPoint(Vector2 point) => _visible && super.containsLocalPoint(point);
-
-  @override
-  void onTapUp(TapUpEvent event) {
-    if (_t < 0.35) return;
-    game.resume();
-  }
-
-  @override
-  void update(double dt) => _t += dt;
-
-  @override
-  void render(Canvas canvas) {
-    if (!_visible) return;
-    final k = _easeOut((_t / 0.25).clamp(0, 1));
-    canvas.drawRect(size.toRect(), Paint()..color = Color.fromRGBO(6, 36, 56, 0.75 * k));
-    canvas.save();
-    canvas.translate(kWorldW / 2, kWorldH * 0.42);
-    canvas.scale(0.85 + 0.15 * k);
-    _title.render(canvas, 'PAUSED', Vector2(0, -60), anchor: Anchor.center);
-    _hint.render(canvas, 'TAP TO CONTINUE', Vector2(0, 120), anchor: Anchor.center);
-    canvas.restore();
-  }
-}
