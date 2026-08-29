@@ -140,12 +140,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             SizedBox(width: 62, child: Center(child: Text('$rank', style: KL.t(size: 20, w: FontWeight.w700)))),
             _Avatar(avatar, size: 55),
             const SizedBox(width: 12),
-            Text(name, style: KL.t(size: 20, w: FontWeight.w600)),
-            if (handle != null) ...[
-              const SizedBox(width: 6),
-              Text(handle, style: KL.t(size: 20, color: const Color(0xFFCFE3F5))),
-            ],
-            const Spacer(),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: name, style: KL.t(size: 20, w: FontWeight.w600)),
+                  if (handle != null) TextSpan(text: ' $handle', style: KL.t(size: 20, color: const Color(0xFFCFE3F5))),
+                ]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text('$pts', style: KL.t(size: 20, w: FontWeight.w700)),
             Text(' PTS', style: KL.t(size: 18)),
             const SizedBox(width: 16),

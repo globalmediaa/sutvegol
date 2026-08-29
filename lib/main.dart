@@ -4,7 +4,13 @@ import 'package:flutter/services.dart';
 
 import 'game/kick_legend_game.dart';
 import 'ui/game_over_overlay.dart';
+import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
+import 'ui/mock_data.dart';
+import 'ui/profile_dialog.dart';
+
+/// Geliştirme: `--dart-define=UI_PREVIEW=leaderboard|profile` ile ekranı doğrudan açar.
+const String kUiPreview = String.fromEnvironment('UI_PREVIEW');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +40,20 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late KickLegendGame _game = _create();
+
+  @override
+  void initState() {
+    super.initState();
+    if (kUiPreview.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (kUiPreview == 'leaderboard') {
+          Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LeaderboardScreen(myScore: 450)));
+        } else if (kUiPreview == 'profile') {
+          showProfileDialog(context, lbEntries(LbTab.season)[3]);
+        }
+      });
+    }
+  }
 
   KickLegendGame _create() {
     final g = KickLegendGame();
