@@ -150,9 +150,9 @@ class KickLegendGame extends FlameGame {
         : target.position + jitter;
     final rGoal = kBallDiameter / 2 * view.ballGoalScale;
     final trackEndY = view.groundY - rGoal;
-    final dir = Vector2(aim.x - ball.position.x, trackEndY - ball.position.y)..normalize();
+    final chord = Vector2(aim.x - ball.position.x, trackEndY - ball.position.y) * 0.4;
     final power = ((trackEndY - aim.y) / (view.goalHeight * 1.3)).clamp(0.0, 1.0);
-    kick(dir, power);
+    kick(chord, rng.nextDouble() * 120 - 60, 0.5, power);
   }
 
   void schedule(double delay, void Function() fn) =>
@@ -172,10 +172,10 @@ class KickLegendGame extends FlameGame {
     }
   }
 
-  void kick(Vector2 dir, double power) {
+  void kick(Vector2 chord, double dev, double tMax, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
-    ball.kick(dir, power);
+    ball.kick(chord, dev, tMax, power);
   }
 
   void haptic(void Function() fn) {

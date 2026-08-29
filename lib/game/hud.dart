@@ -138,8 +138,21 @@ class InputLayer extends PositionComponent
     final lenNorm = ((vec.length - 120) / 800).clamp(0.0, 1.0);
     final power = 0.55 * speedNorm + 0.45 * lenNorm;
 
-    // Nişan: kaydırma yönü (başlangıç → bırakma).
-    game.kick(vec.normalized(), power);
+    // Falso: parmak yolunun kirişten en büyük işaretli sapması ve konumu.
+    final n = Vector2(-vec.y, vec.x)..normalize();
+    final len = vec.length;
+    var dev = 0.0;
+    var tMax = 0.5;
+    for (final s in _samples) {
+      final d = s.$1 - start;
+      final off = d.dot(n);
+      if (off.abs() > dev.abs()) {
+        dev = off;
+        tMax = (d.dot(vec) / (len * len)).clamp(0.0, 1.0);
+      }
+    }
+    if (dev.abs() < 12) dev = 0; // titreme
+    game.kick(vec, dev, tMax, power);
   }
 }
 
