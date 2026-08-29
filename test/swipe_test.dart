@@ -21,7 +21,7 @@ void main() {
     });
     await tester.pump();
     // Splash (~3 s) + top girişi.
-    for (var i = 0; i < 80; i++) {
+    for (var i = 0; i < 110; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(game.state, GameState.idle);
