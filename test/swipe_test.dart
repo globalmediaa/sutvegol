@@ -23,19 +23,19 @@ void main() {
     });
     await tester.pump();
     // Splash (~3 s) + top girişi.
-    for (var i = 0; i < 110; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
+    for (var i = 0; i < 175; i++) {
+      await tester.pump(const Duration(milliseconds: 33));
     }
     expect(game.state, GameState.idle);
 
     final from = Offset(game.view.ballRest.x, game.view.ballRest.y);
     final to = Offset(game.target.position.x, game.target.position.y);
     await tester.timedDragFrom(from, to - from, const Duration(milliseconds: 120));
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 33));
     expect(game.state, GameState.flying);
 
-    for (var i = 0; i < 40; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
+    for (var i = 0; i < 70; i++) {
+      await tester.pump(const Duration(milliseconds: 33));
     }
     expect(game.state, isNot(GameState.flying));
     expect(game.score + (3 - game.lives) * 30, greaterThanOrEqualTo(30),

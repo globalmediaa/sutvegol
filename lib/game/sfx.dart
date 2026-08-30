@@ -85,7 +85,8 @@ class Sfx {
   static void play(String name, {double volume = 1}) {
     if (skipInit || !enabled) return;
     try {
-      FlameAudio.play('$name.wav', volume: volume);
+      // Bir sonraki karede çal: dokunma/karar karesini bloklamasın.
+      Future<void>.microtask(() => FlameAudio.play('$name.wav', volume: volume));
     } catch (_) {}
   }
 

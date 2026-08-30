@@ -119,6 +119,8 @@ class KickLegendGame extends FlameGame {
   @override
   void update(double dt) {
     if (state == GameState.paused) return; // perde açıkken sahne donar
+    // Kare atlamasında (ses yükleme vb.) top ileri zıplamasın.
+    dt = min(dt, 1 / 30);
     super.update(dt);
     _clock += dt;
     if (fever) {
