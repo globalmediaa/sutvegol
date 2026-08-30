@@ -61,7 +61,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
-  static const double flightDur = 0.6;
+  static const double flightDur = 0.67;
   static const double enterDur = 0.55;
   static const double dropDur = 0.45;
 
@@ -75,8 +75,9 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   late double _startScale;
   late double _xEnd;
   late double _hEnd;
-  late double _lob;
-  late Vector2 _ctrl; // bezier kontrol noktası (parmağın ilk yönü)
+  double _hEndWorld = 0;
+  double _apexWorld = 380;
+  late Vector2 _ctrl; // bezier kontrol noktası (parmak yayı)
 
   // Düşme (direk/üst direk).
   late Vector2 _dropFrom;
@@ -102,7 +103,7 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     _t = 0;
     scale = Vector2.all(g.ballRestScale);
     position = Vector2(-140, g.ballRest.y);
-    _groundY = position.y;
+    _groundY = position.y + kBallDiameter / 2 * g.ballRestScale;
     _height = 0;
   }
 
@@ -122,8 +123,11 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     final k = (_start.y - trackEndY) / (-c.y); // parmak → saha ölçeği
     final end = _start + c * k;
     _xEnd = end.x.clamp(-220.0, kWorldW + 220.0);
+    // Kale düzlemindeki yükseklik (ekran px) → dünya birimi (top çapı ölçeği).
     _hEnd = power.clamp(0, 1) * g.goalHeight * 1.3;
-    _lob = 50 + _hEnd * 0.1;
+    _hEndWorld = _hEnd / g.ballGoalScale;
+    // Yay tepesi: videoda ~0.4 top-birimi (380 px); yüksek şutta biraz daha.
+    _apexWorld = 380 + _hEndWorld * 0.12;
     // Kontrol noktası: kiriş üzerinde tMax'ta, normal yönünde sapma × ölçek.
     final n = Vector2(-c.y, c.x)..normalize();
     final tm = tMax.clamp(0.2, 0.8);
@@ -176,7 +180,7 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
         final x = _lerp(-140, g.ballRest.x, k);
         _angle += (x - position.x) / radius;
         position = Vector2(x, g.ballRest.y);
-        _groundY = position.y;
+        _groundY = position.y + radius;
         if (_t >= enterDur) {
           phase = BallPhase.idle;
           position = g.ballRest.clone();
@@ -187,18 +191,22 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
       case BallPhase.flying:
         _t += dt;
         final z = (_t / flightDur).clamp(0.0, 1.0);
-        final trackEndY = g.groundY - goalRadius;
-        // Perspektif: ekranda hızlı başlar, kaleye yaklaşırken yavaşlar;
-        // top başta yavaş, sonda hızlı küçülür (videodan ölçüldü).
-        final sProg = 1 - pow(1 - z, 1.7).toDouble();
+        // Yer izi (gölge): ekranda hızlı başlar, kaleye yaklaşırken yavaşlar.
+        final sProg = 1 - pow(1 - z, 1.4).toDouble();
         final u = 1 - sProg;
+        final r0 = kBallDiameter / 2 * _startScale;
+        final gStartY = _start.y + r0; // yerle temas noktası
+        final gEndY = g.groundY;
         final gx = u * u * _start.x + 2 * u * sProg * _ctrl.x + sProg * sProg * _xEnd;
-        final gy = u * u * _start.y + 2 * u * sProg * _ctrl.y + sProg * sProg * trackEndY;
-        _groundY = gy;
-        _height = _hEnd * sProg + _lob * sin(pi * sProg);
-        final shrink = pow(z, 1.56).toDouble();
-        scale = Vector2.all(_lerp(_startScale, g.ballGoalScale, shrink));
-        position = Vector2(gx, _groundY - _height);
+        final ctrlGy = u * u * gStartY + 2 * u * sProg * (_ctrl.y + r0) + sProg * sProg * gEndY;
+        _groundY = ctrlGy;
+        // Boyut zamanla doğrusal küçülür (videodan ölçüldü).
+        final sc = _lerp(_startScale, g.ballGoalScale, z);
+        scale = Vector2.all(sc);
+        // Dünya yüksekliği: parabol yay + hedef yüksekliğine doğrusal çıkış.
+        final hWorld = 4 * _apexWorld * z * (1 - z) + _hEndWorld * z;
+        _height = hWorld * sc;
+        position = Vector2(gx, _groundY - radius - _height);
         _angle += _spin * dt;
         if (z >= 1) {
           final end = position.clone();
@@ -267,16 +275,17 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     canvas.translate(size.x / 2, size.y / 2);
     canvas.scale(1 / s);
 
-    // Gölge (yerde, hafif sağ-alt).
-    final shadowDy = (_groundY - position.y) + radius * 0.85;
-    final shadowW = kBallDiameter * s * 0.95;
-    final shadowH = kBallDiameter * s * 0.28;
-    final shadowAlpha = (0.38 - _height / 1200).clamp(0.08, 0.38);
+    // Gölge: yer temas noktasında; top yükseldikçe küçülür, soluklaşır, yayılır.
+    final hN = (_height / 320).clamp(0.0, 1.0);
+    final shadowDy = _groundY - position.y;
+    final shadowW = kBallDiameter * s * (0.95 - 0.35 * hN);
+    final shadowH = kBallDiameter * s * (0.30 - 0.10 * hN);
+    final shadowAlpha = 0.42 - 0.24 * hN;
     canvas.drawOval(
-      Rect.fromCenter(center: Offset(radius * 0.12, shadowDy), width: shadowW, height: shadowH),
+      Rect.fromCenter(center: Offset(radius * 0.10, shadowDy), width: shadowW, height: shadowH),
       Paint()
         ..color = Color.fromRGBO(0, 0, 0, shadowAlpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 10 * hN),
     );
 
     // Fever: altın top + parıltı.
