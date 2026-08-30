@@ -124,7 +124,7 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
     final end = _start + c * k;
     _xEnd = end.x.clamp(-220.0, kWorldW + 220.0);
     // Kale düzlemindeki yükseklik (ekran px) → dünya birimi (top çapı ölçeği).
-    _hEnd = power.clamp(0, 1) * g.goalHeight * 1.3;
+    _hEnd = power.clamp(0, 1) * g.goalHeight * 1.15;
     _hEndWorld = _hEnd / g.ballGoalScale;
     // Yay tepesi: videoda ~0.4 top-birimi (380 px); yüksek şutta biraz daha.
     _apexWorld = 380 + _hEndWorld * 0.12;

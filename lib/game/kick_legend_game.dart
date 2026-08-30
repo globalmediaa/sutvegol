@@ -151,7 +151,7 @@ class KickLegendGame extends FlameGame {
     final rGoal = kBallDiameter / 2 * view.ballGoalScale;
     final trackEndY = view.groundY - rGoal;
     final chord = Vector2(aim.x - ball.position.x, trackEndY - ball.position.y) * 0.4;
-    final power = ((trackEndY - aim.y) / (view.goalHeight * 1.3)).clamp(0.0, 1.0);
+    final power = ((trackEndY - aim.y) / (view.goalHeight * 1.15)).clamp(0.0, 1.0);
     kick(chord, rng.nextDouble() * 120 - 60, 0.5, power);
   }
 

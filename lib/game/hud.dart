@@ -134,9 +134,10 @@ class InputLayer extends PositionComponent
     final dtMs = max(1, end.$2 - early.$2);
     final vel = (end.$1 - early.$1) / (dtMs / 1000);
     final speed = vel.length.clamp(0, 9000).toDouble();
-    final speedNorm = ((speed - 700) / 2600).clamp(0.0, 1.0);
-    final lenNorm = ((vec.length - 120) / 800).clamp(0.0, 1.0);
-    final power = 0.55 * speedNorm + 0.45 * lenNorm;
+    // Dünya px/s (ekranın 3 katı): yavaş ~1500, normal ~3000-4000, sert ~6000+.
+    final speedNorm = ((speed - 1500) / 5000).clamp(0.0, 1.0);
+    final lenNorm = ((vec.length - 250) / 1200).clamp(0.0, 1.0);
+    final power = 0.75 * speedNorm + 0.25 * lenNorm;
 
     // Falso: parmak yolunun kirişten en büyük işaretli sapması ve konumu.
     final n = Vector2(-vec.y, vec.x)..normalize();
