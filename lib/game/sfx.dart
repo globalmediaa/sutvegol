@@ -21,9 +21,39 @@ class Sfx {
 
   static Future<void> preload() async {
     try {
-      await FlameAudio.audioCache.loadAll(_files);
+      await FlameAudio.audioCache.loadAll([..._files, 'ambience.wav']);
+      FlameAudio.bgm.initialize();
     } catch (_) {
       // ses yoksa oyun devam eder
+    }
+  }
+
+  static bool _ambienceOn = false;
+
+  /// Sürekli stadyum ambiyansı (videoda kayıt boyunca aynı seviyede).
+  static Future<void> startAmbience() async {
+    if (!enabled || _ambienceOn) return;
+    _ambienceOn = true;
+    try {
+      await FlameAudio.bgm.play('ambience.wav', volume: 0.55);
+    } catch (_) {
+      _ambienceOn = false;
+    }
+  }
+
+  static Future<void> stopAmbience() async {
+    _ambienceOn = false;
+    try {
+      await FlameAudio.bgm.stop();
+    } catch (_) {}
+  }
+
+  static void setEnabled(bool v) {
+    enabled = v;
+    if (v) {
+      startAmbience();
+    } else {
+      stopAmbience();
     }
   }
 

@@ -64,8 +64,8 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
           const Offset(kWorldW / 2, kWorldH * 0.78),
           kWorldH * 0.8,
           [
-            Color.fromRGBO(240, 255, 120, 0.42 * a),
-            Color.fromRGBO(220, 250, 90, 0.22 * a),
+            Color.fromRGBO(240, 255, 120, 0.20 * a),
+            Color.fromRGBO(220, 250, 90, 0.10 * a),
             Color.fromRGBO(255, 240, 120, 0.0),
           ],
           const [0.0, 0.45, 1.0],
@@ -78,7 +78,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
         ..shader = Gradient.linear(
           const Offset(0, 0),
           const Offset(0, kWorldH),
-          [Color.fromRGBO(255, 240, 130, 0.45 * a), Color.fromRGBO(255, 245, 150, 0.0), Color.fromRGBO(230, 255, 120, 0.45 * a)],
+          [Color.fromRGBO(255, 240, 130, 0.22 * a), Color.fromRGBO(255, 245, 150, 0.0), Color.fromRGBO(230, 255, 120, 0.22 * a)],
           const [0.0, 0.35, 1.0],
         ),
     );
@@ -88,7 +88,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
         b.pos.toOffset(),
         b.r,
         Paint()
-          ..color = Color.fromRGBO(235, 255, 140, 0.16 * a)
+          ..color = Color.fromRGBO(235, 255, 140, 0.09 * a)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30),
       );
     }

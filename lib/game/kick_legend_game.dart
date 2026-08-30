@@ -95,6 +95,7 @@ class KickLegendGame extends FlameGame {
     hapticsOn = _prefs?.getBool('haptics') ?? true;
     Sfx.enabled = soundOn;
     await Sfx.preload();
+    Sfx.startAmbience();
 
     scene = SceneRoot()..position = Vector2(0, kWorldH);
     background = Background();
@@ -193,7 +194,7 @@ class KickLegendGame extends FlameGame {
 
   void setSound(bool v) {
     soundOn = v;
-    Sfx.enabled = v;
+    Sfx.setEnabled(v);
     _prefs?.setBool('sound', v);
   }
 
