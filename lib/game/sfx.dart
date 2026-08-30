@@ -6,6 +6,9 @@ class Sfx {
 
   static bool enabled = true;
 
+  /// Testlerde platform eklentisi yok: yükleme ve çalma tamamen atlanır.
+  static bool skipInit = false;
+
   static const _files = [
     'sfx_kick.wav',
     'sfx_hit.wav',
@@ -20,6 +23,7 @@ class Sfx {
   ];
 
   static Future<void> preload() async {
+    if (skipInit) return;
     try {
       await FlameAudio.audioCache.loadAll([..._files, 'ambience.wav']);
       FlameAudio.bgm.initialize();
@@ -32,7 +36,7 @@ class Sfx {
 
   /// Sürekli stadyum ambiyansı (videoda kayıt boyunca aynı seviyede).
   static Future<void> startAmbience() async {
-    if (!enabled || _ambienceOn) return;
+    if (skipInit || !enabled || _ambienceOn) return;
     _ambienceOn = true;
     try {
       await FlameAudio.bgm.play('ambience.wav', volume: 0.55);
@@ -58,7 +62,7 @@ class Sfx {
   }
 
   static void play(String name, {double volume = 1}) {
-    if (!enabled) return;
+    if (skipInit || !enabled) return;
     try {
       FlameAudio.play('$name.wav', volume: volume);
     } catch (_) {}

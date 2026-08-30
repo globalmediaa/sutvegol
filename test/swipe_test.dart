@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kick_legend/game/geometry.dart';
 import 'package:kick_legend/game/kick_legend_game.dart';
+import 'package:kick_legend/game/sfx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('kaydırma jesti şut üretir', (tester) async {
     SharedPreferences.setMockInitialValues({});
+    Sfx.skipInit = true;
     tester.view.physicalSize = const Size(kWorldW, kWorldH);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
