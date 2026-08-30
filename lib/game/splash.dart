@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'geometry.dart';
 import 'kick_legend_game.dart';
+import 'sfx.dart';
 
 double _easeInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
 double _easeOutBack(double t) {
@@ -28,6 +29,7 @@ class SplashLayer extends PositionComponent with HasGameReference<KickLegendGame
   late Sprite _logo;
   double _t = 0;
   bool _done = false;
+  bool _whooshed = false;
 
   static final _loadingText = TextPaint(
     style: const TextStyle(
@@ -48,6 +50,10 @@ class SplashLayer extends PositionComponent with HasGameReference<KickLegendGame
   void update(double dt) {
     if (_done) return;
     _t += dt;
+    if (!_whooshed && _t >= loading) {
+      _whooshed = true;
+      Sfx.splash();
+    }
     final panStart = loading + logoIn + hold;
     if (_t >= panStart + pan) {
       _done = true;

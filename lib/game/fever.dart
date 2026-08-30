@@ -78,7 +78,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
         ..shader = Gradient.linear(
           const Offset(0, 0),
           const Offset(0, kWorldH),
-          [Color.fromRGBO(255, 245, 150, 0.28 * a), Color.fromRGBO(255, 245, 150, 0.0), Color.fromRGBO(230, 255, 120, 0.35 * a)],
+          [Color.fromRGBO(255, 240, 130, 0.45 * a), Color.fromRGBO(255, 245, 150, 0.0), Color.fromRGBO(230, 255, 120, 0.45 * a)],
           const [0.0, 0.35, 1.0],
         ),
     );
@@ -108,22 +108,95 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
         ..close();
       canvas.drawPath(path, sp);
     }
-    // FEVER yazısı (tabelanın üstü).
+    // FEVER tabelası (skor tabelasının üstü): ampullü altın levha + 3D yazı.
     final g = game.view;
-    final cx = g == kWide ? 648.0 : 468.0;
-    final cy = g == kWide ? 615.0 : 445.0;
-    final pulse = 1 + 0.05 * sin(_t * 6);
+    final cx = g == kWide ? 650.0 : 468.0;
+    final cy = g == kWide ? 690.0 : 520.0;
+    final pulse = 1 + 0.03 * sin(_t * 6);
     canvas.save();
     canvas.translate(cx, cy);
     canvas.scale(pulse * (0.7 + 0.3 * a));
-    canvas.skew(-0.08, 0);
+    _drawSign(canvas, a);
     _drawFeverText(canvas, a);
     canvas.restore();
   }
 
+  /// Beş köşeli levha (üstü sivri), açık bej dolgu, altın kenar, ampuller.
+  void _drawSign(Canvas canvas, double a) {
+    final board = Path()
+      ..moveTo(-230, -20)
+      ..lineTo(0, -120)
+      ..lineTo(230, -20)
+      ..lineTo(230, 60)
+      ..lineTo(-230, 60)
+      ..close();
+    canvas.drawPath(
+      board,
+      Paint()
+        ..shader = Gradient.linear(
+          const Offset(0, -120),
+          const Offset(0, 60),
+          [Color.fromRGBO(255, 244, 205, a), Color.fromRGBO(245, 210, 120, a)],
+        ),
+    );
+    canvas.drawPath(
+      board,
+      Paint()
+        ..color = Color.fromRGBO(232, 168, 30, a)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeJoin = StrokeJoin.round,
+    );
+    // Ampuller: kenar boyunca, sırayla parlar.
+    final pts = <Offset>[];
+    void edge(Offset p0, Offset p1, int n) {
+      for (var i = 0; i < n; i++) {
+        final t = i / n;
+        pts.add(Offset(p0.dx + (p1.dx - p0.dx) * t, p0.dy + (p1.dy - p0.dy) * t));
+      }
+    }
+    edge(const Offset(-230, -20), const Offset(0, -120), 6);
+    edge(const Offset(0, -120), const Offset(230, -20), 6);
+    edge(const Offset(230, -20), const Offset(230, 60), 2);
+    edge(const Offset(230, 60), const Offset(-230, 60), 10);
+    edge(const Offset(-230, 60), const Offset(-230, -20), 2);
+    final phase = (_t * 6).floor();
+    for (var i = 0; i < pts.length; i++) {
+      final on = (i + phase) % 2 == 0;
+      canvas.drawCircle(pts[i], 9, Paint()..color = Color.fromRGBO(255, on ? 250 : 200, on ? 160 : 60, a));
+      if (on) {
+        canvas.drawCircle(
+          pts[i],
+          14,
+          Paint()
+            ..color = Color.fromRGBO(255, 240, 120, 0.5 * a)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+      }
+    }
+    // Levha üstü pırıltılar.
+    final sp = Paint()..color = Color.fromRGBO(255, 255, 240, 0.9 * a);
+    for (var i = 0; i < 5; i++) {
+      final tw = (sin(_t * 4 + i * 1.3) + 1) / 2;
+      if (tw < 0.5) continue;
+      final p = Offset(-170 + i * 85.0, -40 + (i.isEven ? 20 : -10));
+      final r = 6 + 8 * tw;
+      canvas.drawPath(
+        Path()
+          ..moveTo(p.dx, p.dy - r)
+          ..quadraticBezierTo(p.dx, p.dy, p.dx + r, p.dy)
+          ..quadraticBezierTo(p.dx, p.dy, p.dx, p.dy + r)
+          ..quadraticBezierTo(p.dx, p.dy, p.dx - r, p.dy)
+          ..quadraticBezierTo(p.dx, p.dy, p.dx, p.dy - r)
+          ..close(),
+        sp,
+      );
+    }
+  }
+
   void _drawFeverText(Canvas canvas, double a) {
     const text = 'FEVER';
-    const size = 112.0;
+    const size = 124.0;
     // 3D derinlik: koyu kahve katmanlar.
     for (var i = 8; i >= 1; i--) {
       TextPaint(
@@ -134,7 +207,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
           color: Color.fromRGBO(120, 70, 0, a),
           letterSpacing: 3,
         ),
-      ).render(canvas, text, Vector2(0, i.toDouble()), anchor: Anchor.center);
+      ).render(canvas, text, Vector2(0, 8 + i.toDouble()), anchor: Anchor.center);
     }
     // Koyu kontur.
     for (final o in const [Offset(-3, 0), Offset(3, 0), Offset(0, -3), Offset(0, 3)]) {
@@ -146,7 +219,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
           color: Color.fromRGBO(140, 80, 0, a),
           letterSpacing: 3,
         ),
-      ).render(canvas, text, Vector2(o.dx, o.dy), anchor: Anchor.center);
+      ).render(canvas, text, Vector2(o.dx, 8 + o.dy), anchor: Anchor.center);
     }
     // Altın dolgu.
     final tp = TextPaint(
@@ -164,7 +237,7 @@ class FeverOverlay extends PositionComponent with HasGameReference<KickLegendGam
           ),
       ),
     );
-    tp.render(canvas, text, Vector2.zero(), anchor: Anchor.center);
+    tp.render(canvas, text, Vector2(0, 8), anchor: Anchor.center);
   }
 }
 

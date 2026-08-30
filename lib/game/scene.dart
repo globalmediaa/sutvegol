@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'geometry.dart';
 import 'kick_legend_game.dart';
+import 'sfx.dart';
 
 double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 double _lerp(double a, double b, double t) => a + (b - a) * t;
@@ -66,6 +67,7 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   static const double dropDur = 0.45;
 
   late Sprite _sprite;
+  late Sprite _gold;
   BallPhase phase = BallPhase.hidden;
   double _t = 0;
   double _angle = 0;
@@ -93,12 +95,14 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   @override
   Future<void> onLoad() async {
     _sprite = Sprite(game.images.fromCache('ball.png'));
+    _gold = Sprite(game.images.fromCache('ball_gold.png'));
     size = Vector2.all(kBallDiameter);
   }
 
   /// Sol kenardan yuvarlanarak gelir.
   void enter() {
     final g = game.view;
+    Sfx.roll();
     phase = BallPhase.entering;
     _t = 0;
     scale = Vector2.all(g.ballRestScale);
@@ -288,39 +292,35 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 10 * hN),
     );
 
-    // Fever: altın top + parıltı.
+    // Fever: altın top + parıltı halkası.
     final fever = game.fever;
     if (fever) {
       canvas.drawCircle(
         Offset.zero,
-        radius * 1.35,
+        radius * 1.45,
         Paint()
-          ..color = const Color(0x66FFE066)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22),
+          ..color = const Color(0x88FFF07A)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26),
+      );
+      canvas.drawCircle(
+        Offset.zero,
+        radius * 1.12,
+        Paint()
+          ..color = const Color(0x66FFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
     }
 
     // Top.
     canvas.save();
     canvas.rotate(_angle);
-    _sprite.render(
+    (fever ? _gold : _sprite).render(
       canvas,
       size: Vector2.all(kBallDiameter * s),
       anchor: Anchor.center,
-      overridePaint: fever
-          ? (Paint()..colorFilter = const ColorFilter.mode(Color(0xFFFFC21A), BlendMode.modulate))
-          : null,
     );
-    if (fever) {
-      // Siyah yamalar turuncuya: üstüne yumuşak turuncu katman.
-      canvas.drawCircle(
-        Offset.zero,
-        radius,
-        Paint()
-          ..color = const Color(0x55FF8A00)
-          ..blendMode = BlendMode.screen,
-      );
-    }
     canvas.restore();
 
     canvas.restore();

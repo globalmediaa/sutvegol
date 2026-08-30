@@ -26,6 +26,10 @@ Videodan birebir kopyalanan "hedefe şut" oyunu (KICK LEGEND) + etrafındaki ara
 ## Geliştirme bayrakları
 - `--dart-define=AUTOPLAY=true` → oyun kendi kendine oynar.
 - `--dart-define=UI_PREVIEW=leaderboard|profile` → ekranı doğrudan açar.
+- `--dart-define=FEVER_TEST=true` → ilk toptan itibaren fever.
+
+## Ses
+- `lib/game/sfx.dart` (flame_audio). Klipler `assets/audio/` — 17:18 videosunun ses kanalından kesildi (kick, hit, miss, roll, fever start/hit/end, gameover, count_end, splash). Ses ayarı pause menüsünden; arka plan müziği yok (videoda ayrıştırılamadı).
 
 ## Test / dağıtım
 - `flutter test` — swipe → şut widget testi.

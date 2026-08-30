@@ -9,12 +9,16 @@ import 'fever.dart';
 import 'geometry.dart';
 import 'hud.dart';
 import 'scene.dart';
+import 'sfx.dart';
 import 'splash.dart';
 
 enum GameState { splash, idle, flying, resolving, paused, gameOver }
 
 /// Geliştirme: `--dart-define=AUTOPLAY=true` ile oyun kendi kendine şut atar.
 const bool kAutoplay = bool.fromEnvironment('AUTOPLAY');
+
+/// Geliştirme: `--dart-define=FEVER_TEST=true` ilk toptan itibaren fever açar.
+const bool kFeverTest = bool.fromEnvironment('FEVER_TEST');
 
 /// Flutter tarafındaki perdelerin overlay anahtarları.
 const String kGameOverOverlay = 'gameOver';
@@ -80,6 +84,7 @@ class KickLegendGame extends FlameGame {
       'splash_bg.png',
       'logo.png',
       'ball.png',
+      'ball_gold.png',
       'target.png',
       'keeper.png',
       'heart.png',
@@ -88,6 +93,8 @@ class KickLegendGame extends FlameGame {
     best = _prefs?.getInt('best') ?? 0;
     soundOn = _prefs?.getBool('sound') ?? true;
     hapticsOn = _prefs?.getBool('haptics') ?? true;
+    Sfx.enabled = soundOn;
+    await Sfx.preload();
 
     scene = SceneRoot()..position = Vector2(0, kWorldH);
     background = Background();
@@ -170,11 +177,13 @@ class KickLegendGame extends FlameGame {
     if (state != GameState.gameOver && state != GameState.paused) {
       state = GameState.idle;
     }
+    if (kFeverTest && !fever) startFever();
   }
 
   void kick(Vector2 chord, double dev, double tMax, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
+    Sfx.kick();
     ball.kick(chord, dev, tMax, power);
   }
 
@@ -184,6 +193,7 @@ class KickLegendGame extends FlameGame {
 
   void setSound(bool v) {
     soundOn = v;
+    Sfx.enabled = v;
     _prefs?.setBool('sound', v);
   }
 
@@ -286,6 +296,11 @@ class KickLegendGame extends FlameGame {
       color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
     ));
     target.shrinkAway();
+    if (fever) {
+      Sfx.feverHit();
+    } else {
+      Sfx.hit();
+    }
     haptic(HapticFeedback.mediumImpact);
     schedule(0.7, () => target.spawn());
 
@@ -297,12 +312,14 @@ class KickLegendGame extends FlameGame {
     streak = 0;
     lives = max(0, lives - 1);
     scoreboard.flashHeart();
+    Sfx.miss();
     haptic(HapticFeedback.lightImpact);
     if (fever) endFever();
 
     if (lives == 0) {
       schedule(0.7, () {
         state = GameState.gameOver;
+        Sfx.gameOver();
         overlays.add(kGameOverOverlay);
       });
       return;
@@ -318,6 +335,7 @@ class KickLegendGame extends FlameGame {
   void startFever() {
     fever = true;
     feverTime = feverDuration;
+    Sfx.feverStart();
     haptic(HapticFeedback.heavyImpact);
   }
 
@@ -325,6 +343,7 @@ class KickLegendGame extends FlameGame {
     if (!fever) return;
     fever = false;
     streak = 0;
+    Sfx.feverEnd();
     scene.add(FeverBurst(Vector2(kWorldW / 2, kWorldH * 0.55)));
   }
 

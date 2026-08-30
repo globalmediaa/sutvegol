@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../game/kick_legend_game.dart';
+import '../game/sfx.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
 import 'mock_data.dart';
@@ -29,6 +30,7 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
     Future.delayed(const Duration(milliseconds: 250), () {
       if (mounted) _count.forward();
     });
+    Future.delayed(const Duration(milliseconds: 1400), Sfx.countEnd);
     Future.delayed(const Duration(milliseconds: 1700), () {
       if (mounted) setState(() => _rankReady = true);
     });
