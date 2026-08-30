@@ -61,7 +61,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
-  static const double flightDur = 0.67;
+  static const double flightDur = 0.58;
   static const double enterDur = 0.55;
   static const double dropDur = 0.45;
 
