@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flame_audio/flame_audio.dart';
 
 /// Videonun ses kanalından kesilen efektler (assets/audio). Ses ayarı kapalıysa çalmaz.
@@ -25,7 +26,7 @@ class Sfx {
   static Future<void> preload() async {
     if (skipInit) return;
     try {
-      await FlameAudio.audioCache.loadAll([..._files, 'ambience.wav']);
+      await FlameAudio.audioCache.loadAll([..._files, 'ambience.wav', 'fever_loop.wav']);
       FlameAudio.bgm.initialize();
     } catch (_) {
       // ses yoksa oyun devam eder
@@ -52,12 +53,32 @@ class Sfx {
     } catch (_) {}
   }
 
+  static AudioPlayer? _feverLoop;
+
+  /// Altın top süresince hafif parıltı döngüsü.
+  static Future<void> startFeverLoop() async {
+    if (skipInit || !enabled || _feverLoop != null) return;
+    try {
+      _feverLoop = await FlameAudio.loopLongAudio('fever_loop.wav', volume: 0.35);
+    } catch (_) {}
+  }
+
+  static Future<void> stopFeverLoop() async {
+    final p = _feverLoop;
+    _feverLoop = null;
+    try {
+      await p?.stop();
+      await p?.dispose();
+    } catch (_) {}
+  }
+
   static void setEnabled(bool v) {
     enabled = v;
     if (v) {
       startAmbience();
     } else {
       stopAmbience();
+      stopFeverLoop();
     }
   }
 

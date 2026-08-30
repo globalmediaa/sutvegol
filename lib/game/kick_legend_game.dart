@@ -337,6 +337,7 @@ class KickLegendGame extends FlameGame {
     fever = true;
     feverTime = feverDuration;
     Sfx.feverStart();
+    Sfx.startFeverLoop();
     haptic(HapticFeedback.heavyImpact);
   }
 
@@ -344,6 +345,7 @@ class KickLegendGame extends FlameGame {
     if (!fever) return;
     fever = false;
     streak = 0;
+    Sfx.stopFeverLoop();
     Sfx.feverEnd();
     scene.add(FeverBurst(Vector2(kWorldW / 2, kWorldH * 0.55)));
   }
