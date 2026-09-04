@@ -64,7 +64,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 class Ball extends PositionComponent with HasGameReference<FrikikKralGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
-  static const double flightDur = 0.58;
+  static const double flightDur = 0.5;
   static const double enterDur = 0.55;
   static const double dropDur = 0.45;
 
@@ -132,8 +132,21 @@ class Ball extends PositionComponent with HasGameReference<FrikikKralGame> {
     // Kale düzlemindeki yükseklik (ekran px) → dünya birimi (top çapı ölçeği).
     _hEnd = power.clamp(0, 1) * g.goalHeight * 1.15;
     _hEndWorld = _hEnd / g.ballGoalScale;
-    // Yay tepesi: videoda ~0.4 top-birimi (380 px); yüksek şutta biraz daha.
-    _apexWorld = 380 + _hEndWorld * 0.12;
+    // Nişan yardımı: iniş noktası hedefe yakınsa yumuşakça hedefe çekilir.
+    final tg = game.target;
+    if (tg.visible) {
+      final endY = trackEndY - _hEnd;
+      final d = Vector2(_xEnd - tg.position.x, endY - tg.position.y).length;
+      const assist = 200.0;
+      if (d < assist) {
+        final k = 0.5 * (1 - d / assist);
+        _xEnd += (tg.position.x - _xEnd) * k;
+        _hEnd += ((trackEndY - tg.position.y) - _hEnd) * k;
+        _hEndWorld = _hEnd / g.ballGoalScale;
+      }
+    }
+    // Yay tepesi: ~0.42 top-birimi; yüksek şutta biraz daha.
+    _apexWorld = 420 + _hEndWorld * 0.12;
     // Kontrol noktası: kiriş üzerinde tMax'ta, normal yönünde sapma × ölçek.
     final n = Vector2(-c.y, c.x)..normalize();
     final tm = tMax.clamp(0.2, 0.8);
@@ -475,20 +488,15 @@ class Keeper extends PositionComponent with HasGameReference<FrikikKralGame> {
       Rect.fromLTWH(railLeft, g.railY, railLen * s, railH * s),
       Radius.circular(6 * s),
     );
-    canvas.drawRRect(rail, Paint()..color = Color.fromRGBO(42, 46, 56, k));
+    canvas.drawRRect(rail, Paint()..color = Color.fromRGBO(24, 24, 24, k));
     canvas.drawRect(
-      Rect.fromLTWH(railLeft, g.railY, railLen * s, 6 * s),
-      Paint()..color = Color.fromRGBO(120, 128, 145, k),
+      Rect.fromLTWH(railLeft, g.railY, railLen * s, 5 * s),
+      Paint()..color = Color.fromRGBO(70, 70, 70, k),
     );
-    final cap = Paint()..color = game.stage.accent.withValues(alpha: k);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(railLeft, g.railY, 18 * s, railH * s), Radius.circular(6 * s)), cap);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(railLeft + railLen * s - 18 * s, g.railY, 18 * s, railH * s), Radius.circular(6 * s)), cap);
     final h = keeperH * s;
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(cx - keeperW * 1.2 * s, g.railY - h * k - 2, keeperW * 2.4 * s, h * k + 4));
+    canvas.clipRect(Rect.fromLTWH(cx - keeperW * s, g.railY - h * k - 2, keeperW * 2 * s, h * k + 4));
     canvas.translate(cx, g.railY + 2);
-    // Ray üstünde kayarken hafif salınım.
-    canvas.rotate(sin(_t * 5) * 0.03);
     SceneArt.paintKeeper(canvas, keeperW * s, h, 1);
     canvas.restore();
   }

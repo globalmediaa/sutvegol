@@ -234,51 +234,35 @@ class SceneArt {
     c.drawCircle(Offset.zero, r * 0.09, Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: alpha));
   }
 
-  /// Antrenman mankeni kaleci: bottomCenter orijinde, [h] yüksekliğinde.
+  /// Kaleci mankeni: klasik siyah silüet (kafa, omuzlar, gövde, iki ince bacak).
+  /// bottomCenter orijinde, [w]x[h] (referans 116x280).
   static void paintKeeper(Canvas c, double w, double h, double alpha) {
-    final navy = Paint()..color = const Color(0xFF1B2A6B).withValues(alpha: alpha);
-    final line = Paint()
-      ..color = const Color(0xFF0B1226).withValues(alpha: alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-    final amber = Paint()..color = const Color(0xFFFFB13B).withValues(alpha: alpha);
-    RRect rr(double x, double y, double ww, double hh, double rad) => RRect.fromRectAndRadius(Rect.fromLTWH(x, y, ww, hh), Radius.circular(rad));
-    // Bacaklar.
-    for (final x in [-w * 0.34, w * 0.1]) {
-      c.drawRRect(rr(x, -h * 0.27, w * 0.24, h * 0.27, 10), navy);
-      c.drawRRect(rr(x, -h * 0.27, w * 0.24, h * 0.27, 10), line);
-    }
-    // Gövde + turuncu şeritler.
-    final body = rr(-w / 2, -h * 0.78, w, h * 0.55, 26);
-    c.drawRRect(body, navy);
-    c.save();
-    c.clipRRect(body);
-    for (final dy in [0.0, 70.0]) {
-      final p = Path()
-        ..moveTo(-w, -h * 0.62 + dy)
-        ..lineTo(w, -h * 0.72 + dy)
-        ..lineTo(w, -h * 0.66 + dy)
-        ..lineTo(-w, -h * 0.56 + dy)
-        ..close();
-      c.drawPath(p, amber);
-    }
-    c.restore();
-    c.drawRRect(body, line);
-    // Kollar (yukarı açık).
-    for (final s in [-1.0, 1.0]) {
-      c.save();
-      c.translate(s * w * 0.46, -h * 0.72);
-      c.rotate(s * -0.55);
-      c.drawRRect(rr(-w * 0.11, -h * 0.28, w * 0.22, h * 0.32, 12), navy);
-      c.drawRRect(rr(-w * 0.11, -h * 0.28, w * 0.22, h * 0.32, 12), line);
-      c.restore();
-    }
-    // Kafa.
-    c.drawCircle(Offset(0, -h * 0.88), w * 0.3, amber);
-    c.drawCircle(Offset(0, -h * 0.88), w * 0.3, line);
-    final eye = Paint()..color = const Color(0xFF0B1226).withValues(alpha: alpha);
-    c.drawCircle(Offset(-w * 0.1, -h * 0.9), 4.5, eye);
-    c.drawCircle(Offset(w * 0.1, -h * 0.9), 4.5, eye);
+    final fill = Paint()..color = const Color(0xFF1C2230).withValues(alpha: alpha);
+    final leg = Paint()
+      ..color = const Color(0xFF12161F).withValues(alpha: alpha)
+      ..strokeWidth = w * 0.075
+      ..strokeCap = StrokeCap.round;
+    // Bacaklar: gövde altından raya doğru hafif açılarak.
+    c.drawLine(Offset(-w * 0.30, -h * 0.40), Offset(-w * 0.44, 0), leg);
+    c.drawLine(Offset(w * 0.30, -h * 0.40), Offset(w * 0.44, 0), leg);
+    // Gövde: omuzları yuvarlak, hafif geniş plaka.
+    final torso = Path()
+      ..moveTo(-w * 0.34, -h * 0.72)
+      ..quadraticBezierTo(-w * 0.5, -h * 0.72, -w * 0.5, -h * 0.60)
+      ..lineTo(-w * 0.46, -h * 0.40)
+      ..lineTo(w * 0.46, -h * 0.40)
+      ..lineTo(w * 0.5, -h * 0.60)
+      ..quadraticBezierTo(w * 0.5, -h * 0.72, w * 0.34, -h * 0.72)
+      ..close();
+    c.drawPath(torso, fill);
+    // Boyun ve kafa.
+    c.drawRect(Rect.fromLTWH(-w * 0.09, -h * 0.80, w * 0.18, h * 0.1), fill);
+    c.drawCircle(Offset(0, -h * 0.865), w * 0.29, fill);
+    // Aşınma lekeleri.
+    final spot = Paint()..color = const Color(0xFF0B0E16).withValues(alpha: 0.6 * alpha);
+    c.drawCircle(Offset(w * 0.22, -h * 0.55), w * 0.06, spot);
+    c.drawCircle(Offset(w * 0.12, -h * 0.47), w * 0.04, spot);
+    c.drawCircle(Offset(-w * 0.1, -h * 0.9), w * 0.035, spot);
   }
 
   // ------------------------------------------------------------- sahne
@@ -293,6 +277,8 @@ class SceneArt {
     switch (stage) {
       case Stage.street:
         _streetBackdrop(c, g, rng);
+      case Stage.beach:
+        _beachBackdrop(c, g, rng);
       case Stage.cage:
         _cageBackdrop(c, g, rng);
       case Stage.stadium:
@@ -308,6 +294,7 @@ class SceneArt {
   static void _sky(Canvas c, Stage stage, Random rng) {
     final colors = switch (stage) {
       Stage.street => const [Color(0xFF2B1E5C), Color(0xFF7A3E8E), Color(0xFFE8684A), Color(0xFFFFB35C)],
+      Stage.beach => const [Color(0xFF2F8FE8), Color(0xFF56B0F5), Color(0xFF9DD6FB), Color(0xFFDCEFFB)],
       Stage.cage => const [Color(0xFF050A1C), Color(0xFF0A1330), Color(0xFF122650), Color(0xFF1B3466)],
       Stage.stadium => const [Color(0xFF0B1240), Color(0xFF1B2A6B), Color(0xFF3B4C9C), Color(0xFF6C7FCB)],
     };
@@ -320,6 +307,10 @@ class SceneArt {
       c.drawCircle(const Offset(300, 830), 210, Paint()..color = const Color(0x55FFD27A)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 90));
       c.drawCircle(const Offset(300, 830), 105, Paint()..color = const Color(0xFFFFE6A3));
       _clouds(c, rng, 120, 640, 6, const Color(0xFFF6B8A8), const Color(0xFFFFE0D2));
+    } else if (stage == Stage.beach) {
+      c.drawCircle(const Offset(1010, 300), 200, Paint()..color = const Color(0x66FFF3B0)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80));
+      c.drawCircle(const Offset(1010, 300), 92, Paint()..color = const Color(0xFFFFF6C8));
+      _clouds(c, rng, 140, 620, 5, const Color(0xFFF4FAFF), const Color(0xFFFFFFFF));
     } else {
       for (var i = 0; i < (stage == Stage.cage ? 170 : 60); i++) {
         final y = rng.nextDouble() * 900;
@@ -448,6 +439,80 @@ class SceneArt {
     c.drawRect(Rect.fromLTWH(60, wallBottom - 140, 210, 8), Paint()..color = const Color(0x55000000));
     // Duvar dibi gölgesi.
     c.drawRect(Rect.fromLTRB(-40, wallBottom - 90, kWorldW + 40, wallBottom), Paint()..shader = ui.Gradient.linear(Offset(0, wallBottom - 90), Offset(0, wallBottom), const [Color(0x00000000), Color(0x66000000)]));
+  }
+
+  // ---- Sahil: deniz, köpük, palmiyeler, şemsiye.
+  static void _beachBackdrop(Canvas c, ViewGeom g, Random rng) {
+    final horizon = g.crossbarY - 420;
+    final shore = g.groundY - 130;
+    c.drawRect(
+      Rect.fromLTRB(-40, horizon, kWorldW + 40, shore),
+      Paint()..shader = ui.Gradient.linear(Offset(0, horizon), Offset(0, shore), const [Color(0xFF1B6FD0), Color(0xFF2AA8DD), Color(0xFF4FD0E6)], const [0, 0.55, 1]),
+    );
+    // Ufukta yelkenli.
+    final sail = Paint()..color = const Color(0xFFFFFFFF);
+    c.drawPath(Path()..moveTo(300, horizon + 6)..lineTo(300, horizon - 70)..lineTo(350, horizon + 6)..close(), sail);
+    c.drawPath(Path()..moveTo(280, horizon + 8)..lineTo(372, horizon + 8)..lineTo(360, horizon + 22)..lineTo(292, horizon + 22)..close(), Paint()..color = const Color(0xFF1B2A6B));
+    // Dalga köpükleri: yaklaştıkça uzun ve belirgin.
+    for (var i = 0; i < 80; i++) {
+      final t = rng.nextDouble();
+      final y = horizon + 20 + t * (shore - horizon - 60);
+      final x = rng.nextDouble() * kWorldW;
+      final w = 30 + 220 * t;
+      c.drawPath(
+        Path()..moveTo(x - w / 2, y)..quadraticBezierTo(x, y - 6 - 10 * t, x + w / 2, y),
+        Paint()
+          ..color = Color.fromRGBO(255, 255, 255, 0.3 + 0.5 * t)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 + 5 * t
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    // Kıyı köpüğü.
+    final foam = Path()..moveTo(-40, shore + 10);
+    for (var x = -40.0; x <= kWorldW + 40; x += 20) {
+      foam.lineTo(x, shore - 26 + sin(x / 90) * 12 + sin(x / 37) * 5);
+    }
+    foam.lineTo(kWorldW + 40, shore + 10);
+    foam.close();
+    c.drawPath(foam, Paint()..color = const Color(0xE6FFFFFF));
+    c.drawPath(foam, Paint()..color = const Color(0x55FFFFFF)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+    // Palmiyeler.
+    _palm(c, Offset(150, shore + 20), 680, 1, rng);
+    _palm(c, Offset(1190, shore + 20), 600, -1, rng);
+    // Şemsiye (sağ).
+    c.save();
+    c.translate(1000, shore - 40);
+    c.rotate(-0.12);
+    c.drawRect(const Rect.fromLTWH(-6, -330, 12, 330), Paint()..color = const Color(0xFFE9E3D5));
+    for (var i = 0; i < 8; i++) {
+      c.drawArc(Rect.fromCircle(center: const Offset(0, -320), radius: 160), pi + i * pi / 8, pi / 8, true, Paint()..color = i.isEven ? const Color(0xFFFF5C8A) : const Color(0xFFFFFFFF));
+    }
+    c.drawArc(Rect.fromCircle(center: const Offset(0, -320), radius: 160), pi, pi, false, Paint()..color = const Color(0xFFB03A5B)..style = PaintingStyle.stroke..strokeWidth = 6);
+    c.restore();
+  }
+
+  static void _palm(Canvas c, Offset base, double h, double dir, Random rng) {
+    final top = Offset(base.dx + dir * 110, base.dy - h);
+    final trunk = Path()
+      ..moveTo(base.dx, base.dy)
+      ..quadraticBezierTo(base.dx + dir * 10, base.dy - h * 0.6, top.dx, top.dy);
+    c.drawPath(trunk, Paint()..color = const Color(0xFF7A4B26)..style = PaintingStyle.stroke..strokeWidth = 30..strokeCap = StrokeCap.round);
+    c.drawPath(trunk, Paint()..color = const Color(0xFF9C6436)..style = PaintingStyle.stroke..strokeWidth = 14..strokeCap = StrokeCap.round);
+    for (var i = 0; i < 7; i++) {
+      final a = -pi * 0.95 + i * (pi * 0.9 / 6);
+      final len = 210 + rng.nextDouble() * 60;
+      final tip = top + Offset(cos(a) * len, sin(a) * len + 60);
+      final ctrl = top + Offset(cos(a) * len * 0.55, sin(a) * len * 0.55 - 50);
+      final n = Offset(-(tip.dy - top.dy), tip.dx - top.dx) / len * 26;
+      final leaf = Path()
+        ..moveTo(top.dx, top.dy)
+        ..quadraticBezierTo(ctrl.dx + n.dx, ctrl.dy + n.dy, tip.dx, tip.dy)
+        ..quadraticBezierTo(ctrl.dx - n.dx, ctrl.dy - n.dy, top.dx, top.dy)
+        ..close();
+      c.drawPath(leaf, Paint()..color = i.isEven ? const Color(0xFF2E9E4F) : const Color(0xFF3BB662));
+    }
+    c.drawCircle(top + const Offset(0, 8), 16, Paint()..color = const Color(0xFF7A4B26));
   }
 
   // ---- Halı saha: gece, projektör direkleri, tel örgü.
@@ -591,10 +656,14 @@ class SceneArt {
           ..style = PaintingStyle.stroke;
         c.drawPath(Path()..moveTo(120, 2100)..lineTo(180, 2220)..lineTo(150, 2330)..lineTo(230, 2480), crack);
         c.drawPath(Path()..moveTo(1180, 1900)..lineTo(1120, 2010)..lineTo(1160, 2140), crack);
-        c.drawCircle(const Offset(1060, 2640), 78, Paint()..color = const Color(0xFF23262E));
-        c.drawCircle(const Offset(1060, 2640), 78, Paint()..color = const Color(0xFF5A5F6B)..style = PaintingStyle.stroke..strokeWidth = 6);
-        c.drawCircle(const Offset(1060, 2640), 50, Paint()..color = const Color(0xFF5A5F6B)..style = PaintingStyle.stroke..strokeWidth = 4);
         _pitchLines(c, g, const Color(0xCCFFFFFF), 9, rough: true);
+      case Stage.beach:
+        c.drawRect(area, Paint()..shader = ui.Gradient.linear(Offset(0, top), const Offset(0, kWorldH), const [Color(0xFFF2DCA8), Color(0xFFE2C387)]));
+        c.drawRect(Rect.fromLTWH(0, top, kWorldW, 70), Paint()..shader = ui.Gradient.linear(Offset(0, top), Offset(0, top + 70), const [Color(0xFFD5B67E), Color(0x00D5B67E)]));
+        for (var i = 0; i < 700; i++) {
+          c.drawCircle(Offset(rng.nextDouble() * kWorldW, top + rng.nextDouble() * (kWorldH - top)), 1.5 + rng.nextDouble() * 2.5, Paint()..color = Color.fromRGBO(150, 110, 50, 0.08 + rng.nextDouble() * 0.12));
+        }
+        _pitchLines(c, g, const Color(0xCCB98F4E), 9);
       case Stage.cage:
         c.drawRect(area, Paint()..shader = ui.Gradient.linear(Offset(0, top), const Offset(0, kWorldH), const [Color(0xFF2FA352), Color(0xFF1F7A3C)]));
         c.drawRect(area, Paint()..shader = ui.Gradient.radial(Offset(kWorldW / 2, g.groundY + 500), 1400, const [Color(0x33FFFFFF), Color(0x00FFFFFF)]));
@@ -657,17 +726,6 @@ class SceneArt {
     seg(Offset(cx - g.goalWidth / 2 - 60, y0), Offset(cx - g.goalWidth / 2 - 90, y0 + 230));
     seg(Offset(cx + g.goalWidth / 2 + 60, y0), Offset(cx + g.goalWidth / 2 + 90, y0 + 230));
     seg(Offset(cx - g.goalWidth / 2 - 90, y0 + 230), Offset(cx + g.goalWidth / 2 + 90, y0 + 230));
-    // Ceza yayı.
-    final arc = Path()..addArc(Rect.fromCenter(center: Offset(cx, spotY), width: 700, height: 300), 0.35, pi - 0.7);
-    if (rough) {
-      final m = arc.computeMetrics().first;
-      for (var d = 0.0; d < m.length; d += 30) {
-        final t0 = m.getTangentForOffset(d)!.position, t1 = m.getTangentForOffset(min(m.length, d + 20))!.position;
-        c.drawLine(t0, t1, p);
-      }
-    } else {
-      c.drawPath(arc, p);
-    }
     c.drawCircle(Offset(cx, spotY), width * 0.9, Paint()..color = color);
   }
 

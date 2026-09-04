@@ -48,6 +48,7 @@ const List<FkBadge> kBadges = [
   FkBadge('first_goal', 'İlk gol', _green, icon: Icons.sports_soccer),
   FkBadge('hat_trick', 'Hat-trick', _green, text: '3'),
   FkBadge('street_king', 'Sokağın kralı', _orange, icon: Icons.location_city),
+  FkBadge('beach_king', 'Sahil kralı', 0xFFFF5C8A, icon: Icons.beach_access),
   FkBadge('cage_king', 'Halı saha kralı', _lightBlue, icon: Icons.sports),
   FkBadge('stadium_king', 'Stadyum kralı', _yellow, icon: Icons.stadium),
   FkBadge('king_mode_1', 'İlk Kral Modu', _orange, icon: Icons.local_fire_department),

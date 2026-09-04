@@ -195,18 +195,46 @@ def slow_mod(dur, rate, depth, base=1.0):
     return [base + depth * math.sin(2 * math.pi * rate * i / SR + ph) for i in range(n(dur))]
 
 def amb_street(dur=24.0):
-    wind = lowpass(noise(dur), 300)
-    m = slow_mod(dur, 0.13, 0.35, 0.65)
-    wind = [v * g for v, g in zip(wind, m)]
+    """Şehir: sabit trafik uğultusu, geçen arabalar (doppler), korna, uzak siren, köpek."""
+    hum = lowpass(noise(dur), 170)
+    hum = [v * g for v, g in zip(hum, slow_mod(dur, 0.05, 0.08, 0.92))]
+    hiss = highpass(lowpass(noise(dur), 1400), 500)
+    hiss = [v * g for v, g in zip(hiss, slow_mod(dur, 0.21, 0.3, 0.6))]
     cars = zeros(dur)
-    for at in (3.5, 14.0):
-        span = 3.2
-        car = lowpass(noise(span), lambda t: 500 + 900 * math.sin(math.pi * t / span))
-        car = env(car, [(0, 0), (span * 0.5, 1), (span, 0)])
-        cars = mix((cars, 0, 1), (car, at, 0.7))
-    horn = tone(415, 0.35, decay=0.4, harm=[(2, 0.5), (3, 0.3)])
+    for at in (1.2, 6.8, 12.9, 18.6):
+        span = rng.uniform(2.3, 3.4)
+        tire = highpass(lowpass(noise(span), lambda t, sp=span: 800 + 1600 * math.sin(math.pi * t / sp)), 260)
+        tire = env(tire, [(0, 0), (span * 0.45, 1), (span * 0.55, 0.9), (span, 0)])
+        eng = tone(0, span, sweep=(160, 95), harm=[(2, 0.5), (3, 0.3), (4, 0.15)])
+        eng = env(eng, [(0, 0), (span * 0.4, 0.8), (span * 0.6, 0.7), (span, 0)])
+        cars = mix((cars, 0, 1), (tire, at, 0.8), (eng, at, 0.3))
+    honk = tone(440, 0.4, decay=0.5, harm=[(2, 0.6), (3, 0.35), (4, 0.15)])
+    horn = mix((honk, 0, 1), (honk, 0.45, 1))
+    siren = tone(760, 3.2, attack=0.3, vib=0.16, vibr=0.55, harm=[(2, 0.3)])
+    siren = env(siren, [(0, 0), (1.2, 1), (2.2, 1), (3.2, 0)])
     bark = mix((tone(0, 0.12, sweep=(500, 300), decay=0.05, harm=[(2, 0.5)]), 0, 1), (tone(0, 0.12, sweep=(520, 300), decay=0.05, harm=[(2, 0.5)]), 0.18, 0.8))
-    x = mix((wind, 0, 1), (cars, 0, 0.6), (horn, 19.5, 0.12), (bark, 8.7, 0.08))
+    x = mix((hum, 0, 0.8), (hiss, 0, 0.12), (cars, 0, 0.7), (horn, 9.6, 0.18), (siren, 15.2, 0.05), (bark, 4.1, 0.09))
+    return loopify(x, 1.5)
+
+def amb_beach(dur=24.0):
+    """Sahil: yavaş dalga salınımı, kıyıya vuran köpük, martılar, hafif esinti."""
+    swell = lowpass(noise(dur), 420)
+    swell = [v * g for v, g in zip(swell, slow_mod(dur, 0.11, 0.55, 0.55))]
+    crash = zeros(dur)
+    for at in (0.8, 5.4, 10.1, 14.9, 19.7):
+        sp = 3.4
+        w = highpass(lowpass(noise(sp), lambda t, sp=sp: 900 + 2200 * math.sin(math.pi * t / sp)), 300)
+        crash = mix((crash, 0, 1), (env(w, [(0, 0), (sp * 0.35, 1), (sp, 0)]), at, 0.8))
+    breeze = highpass(lowpass(noise(dur), 900), 300)
+    breeze = [v * g for v, g in zip(breeze, slow_mod(dur, 0.17, 0.3, 0.35))]
+    gulls = zeros(dur)
+    for at in (3.0, 8.6, 16.4):
+        call = zeros(1.4)
+        for k in range(3):
+            cry = tone(0, 0.32, sweep=(1900, 1250), decay=0.25, vib=0.05, vibr=14, harm=[(2, 0.4), (3, 0.15)])
+            call = mix((call, 0, 1), (cry, k * 0.42, 1 - k * 0.2))
+        gulls = mix((gulls, 0, 1), (call, at, rng.uniform(0.5, 0.9)))
+    x = mix((swell, 0, 1), (crash, 0, 0.6), (breeze, 0, 0.5), (gulls, 0, 0.07))
     return loopify(x, 1.5)
 
 def amb_cage(dur=24.0):
@@ -257,5 +285,6 @@ if __name__ == '__main__':
     write('sfx_stage_up.wav', sfx_stage_up())
     write('king_loop.wav', king_loop(), 0.5)
     write('amb_street.wav', amb_street(), 0.55)
+    write('amb_beach.wav', amb_beach(), 0.55)
     write('amb_cage.wav', amb_cage(), 0.5)
     write('amb_stadium.wav', amb_stadium(), 0.6)

@@ -12,11 +12,12 @@ const double kBallDiameter = 216;
 /// Hedef halkasının çapı.
 const double kTargetDiameter = 148;
 
-/// Oyunun sahneleri: skor arttıkça sokaktan stadyuma.
+/// Oyunun sahneleri: skor arttıkça sokak → sahil → halı saha → stadyum.
 enum Stage {
   street('SOKAK', 0, Color(0xFFFF7A1A)),
-  cage('HALI SAHA', 300, Color(0xFF35D5F2)),
-  stadium('STADYUM', 900, Color(0xFFFFC53D));
+  beach('SAHİL', 300, Color(0xFFFF5C8A)),
+  cage('HALI SAHA', 700, Color(0xFF35D5F2)),
+  stadium('STADYUM', 1200, Color(0xFFFFC53D));
 
   const Stage(this.label, this.minScore, this.accent);
   final String label;
