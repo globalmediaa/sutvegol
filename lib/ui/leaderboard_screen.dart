@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'mock_data.dart';
 import 'profile_dialog.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
-/// LEADERBOARD ekranı: kırmızı başlık, sekmeler, mavi gövde, podyum ve liste.
+/// SIRALAMA ekranı: lacivert zemin, üstte logo + sekmeler, sabit "Sen" satırı,
+/// podyum (cam kaideler) ve kayan liste.
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key, required this.myScore});
   final int myScore;
@@ -25,7 +27,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     if (mounted) setState(() => _loading = false);
   }
 
@@ -33,71 +35,74 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget build(BuildContext context) {
     final list = lbEntries(_tab);
     final myRank = rankFor(list, widget.myScore);
+    final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      backgroundColor: KL.bodyBottom,
-      body: Column(
+      backgroundColor: FK.navy,
+      body: Stack(
         children: [
-          _header(context),
-          _tabs(),
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [KL.bodyTop, KL.bodyBottom]),
-              ),
-              child: Column(
-                children: [
-                  // Logo ve "You" satırı sabit; podyum + liste kayar.
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Image.asset('assets/images/logo.png', width: 240, height: 115, fit: BoxFit.contain),
-                  ),
-                  _row(context, rank: myRank, avatar: 'avatar_you.png', name: 'You', handle: '($kMeHandle)', pts: widget.myScore, highlight: true, entry: const LbEntry('You', 0, 'avatar_you.png')),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.only(bottom: 30),
-                      children: [
-                        if (_loading)
-                          const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: _Loading())
-                        else ...[
-                          _Podium(list: list, onTap: (e) => showProfileDialog(context, e)),
-                          for (var i = 3; i < list.length; i++)
-                            _row(context, rank: rankAt(list, i), avatar: list[i].avatar, name: list[i].name, pts: list[i].pts, entry: list[i]),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+          // Üstte sıcak parıltı.
+          Positioned(
+            top: -220,
+            left: -100,
+            right: -100,
+            child: IgnorePointer(
+              child: Container(
+                height: 520,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(colors: [FK.orange.withValues(alpha: 0.35), FK.orange.withValues(alpha: 0)]),
+                ),
               ),
             ),
+          ),
+          Column(
+            children: [
+              SizedBox(height: top + 8),
+              _header(context),
+              const SizedBox(height: 4),
+              const LogoWidget(width: 210, subtitle: false),
+              const SizedBox(height: 10),
+              _tabs(),
+              const SizedBox(height: 10),
+              _row(context, rank: myRank, name: kMeName, handle: kMeHandle, pts: widget.myScore, highlight: true, entry: const LbEntry(kMeName, 0)),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _loading
+                      ? const Padding(key: ValueKey('loading'), padding: EdgeInsets.only(top: 60), child: _Loading())
+                      : ListView(
+                          key: ValueKey(_tab),
+                          padding: const EdgeInsets.only(bottom: 30),
+                          children: [
+                            _Podium(list: list, onTap: (e) => showProfileDialog(context, e)),
+                            for (var i = 3; i < list.length; i++) _row(context, rank: rankAt(list, i), name: list[i].name, pts: list[i].pts, entry: list[i]),
+                          ],
+                        ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _header(BuildContext context) => Container(
-        color: KL.red,
-        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-        height: MediaQuery.paddingOf(context).top + 64,
-        child: Stack(
+  Widget _header(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
           children: [
-            Positioned(
-              left: 14,
-              top: 0,
-              bottom: 0,
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 22),
-              ),
-            ),
-            Center(child: Text('LEADERBOARD', style: KL.t(size: 22, w: FontWeight.w700, spacing: 0.5))),
+            RoundButton(icon: Icons.arrow_back_ios_new_rounded, size: 44, onTap: () => Navigator.of(context).pop()),
+            Expanded(child: Center(child: Text('SIRALAMA', style: FK.t(size: 20, w: FontWeight.w700, spacing: 3)))),
+            const SizedBox(width: 44),
           ],
         ),
       );
 
   Widget _tabs() => Container(
-        color: KL.tabBlack,
-        height: 40,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        height: 44,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: FK.glass, borderRadius: BorderRadius.circular(22), border: Border.all(color: FK.glassBorder)),
         child: Row(
           children: [
             for (final t in LbTab.values)
@@ -109,18 +114,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     setState(() => _tab = t);
                     _load();
                   },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 2),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      color: _tab == t ? KL.red : Colors.transparent,
-                      borderRadius: t == LbTab.allTime
-                          ? const BorderRadius.horizontal(left: Radius.circular(10))
-                          : const BorderRadius.horizontal(right: Radius.circular(10)),
+                      gradient: _tab == t ? FK.fire : null,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: _tab == t ? FK.glow(12, alpha: 0.35, dy: 3) : null,
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      switch (t) { LbTab.month => 'This month', LbTab.season => 'Season', LbTab.allTime => 'All time' },
-                      style: KL.t(size: 17, w: _tab == t ? FontWeight.w700 : FontWeight.w600, color: _tab == t ? Colors.white : const Color(0xFFBDBDBD)),
+                      switch (t) { LbTab.month => 'Bu ay', LbTab.season => 'Sezon', LbTab.allTime => 'Tüm zamanlar' },
+                      style: FK.t(size: 14.5, w: FontWeight.w700, color: _tab == t ? Colors.white : FK.muted),
                     ),
                   ),
                 ),
@@ -129,35 +133,40 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         ),
       );
 
-  Widget _row(BuildContext context, {required int rank, required String avatar, required String name, String? handle, required int pts, bool highlight = false, required LbEntry entry}) {
+  Widget _row(BuildContext context, {required int rank, required String name, String? handle, required int pts, bool highlight = false, required LbEntry entry}) {
     return GestureDetector(
       onTap: highlight ? null : () => showProfileDialog(context, entry),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        height: 77,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: highlight ? KL.youRow.withValues(alpha: 0.42) : Colors.white.withValues(alpha: 0.22),
-          borderRadius: BorderRadius.circular(12),
+          gradient: highlight ? LinearGradient(colors: [FK.orange.withValues(alpha: 0.28), FK.amber.withValues(alpha: 0.12)]) : null,
+          color: highlight ? null : FK.glass,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: highlight ? FK.orange.withValues(alpha: 0.7) : FK.glassBorder),
         ),
         child: Row(
           children: [
-            SizedBox(width: 62, child: Center(child: Text('$rank', style: KL.t(size: 20, w: FontWeight.w700)))),
-            _Avatar(avatar, size: 55),
+            SizedBox(width: 36, child: Center(child: Text('$rank', style: FK.t(size: 17, w: FontWeight.w700, color: highlight ? FK.amber : FK.muted)))),
+            AvatarCircle(highlight ? kMeHandle : name, size: 44, ring: highlight ? FK.orange : null),
             const SizedBox(width: 12),
             Expanded(
-              child: Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: name, style: KL.t(size: 20, w: FontWeight.w600)),
-                  if (handle != null) TextSpan(text: ' $handle', style: KL.t(size: 20, color: const Color(0xFFCFE3F5))),
-                ]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: FK.t(size: 16, w: FontWeight.w700)),
+                  if (handle != null) Text('@$handle', style: FK.t(size: 12, color: FK.muted)),
+                  if (handle == null) Text('Seviye ${entry.level}', style: FK.t(size: 12, color: FK.muted)),
+                ],
               ),
             ),
             const SizedBox(width: 8),
-            Text('$pts', style: KL.t(size: 20, w: FontWeight.w700)),
-            Text(' PTS', style: KL.t(size: 18)),
-            const SizedBox(width: 16),
+            Text('$pts', style: FK.t(size: 18, w: FontWeight.w700, color: highlight ? FK.amber : Colors.white)),
+            const SizedBox(width: 4),
+            Text('PUAN', style: FK.t(size: 11, w: FontWeight.w600, color: FK.muted, spacing: 1)),
+            const SizedBox(width: 6),
           ],
         ),
       ),
@@ -170,31 +179,14 @@ class _Loading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
         children: [
-          const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xCCFFFFFF))),
+          const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: FK.orange)),
           const SizedBox(height: 10),
-          Text('Loading', style: KL.t(size: 15, color: const Color(0xCCFFFFFF))),
+          Text('Yükleniyor', style: FK.t(size: 14, color: FK.muted)),
         ],
       );
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar(this.asset, {required this.size, this.ring});
-  final String asset;
-  final double size;
-  final Color? ring;
-  @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: ring ?? Colors.white, width: ring != null ? 4 : 2.5),
-          image: DecorationImage(image: AssetImage('assets/images/$asset'), fit: BoxFit.cover),
-        ),
-      );
-}
-
-/// İlk üç: #2 sol, #1 orta (yukarıda), #3 sağ; braket çizgileri arkada.
+/// İlk üç: cam kaideler (2-1-3), gradyan halkalı avatarlar, madalya rozetleri.
 class _Podium extends StatelessWidget {
   const _Podium({required this.list, required this.onTap});
   final List<LbEntry> list;
@@ -203,71 +195,64 @@ class _Podium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (list.length < 3) return const SizedBox.shrink();
-    return SizedBox(
-      height: 250,
-      child: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _BracketPainter())),
-          _slot(context, list[1], 2, left: 24, top: 60, badge: const Color(0xFFBDBDBD)),
-          _slot(context, list[0], 1, left: 172, top: 8, badge: const Color(0xFFD9A31C), ring: const Color(0xFFD9A31C)),
-          _slot(context, list[2], 3, left: 320, top: 60, badge: const Color(0xFFBDBDBD)),
-        ],
-      ),
-    );
-  }
-
-  Widget _slot(BuildContext context, LbEntry e, int rank, {required double left, required double top, required Color badge, Color? ring}) {
-    return Positioned(
-      left: left,
-      top: top,
-      width: 96,
-      child: GestureDetector(
-        onTap: () => onTap(e),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: SizedBox(
+        height: 300,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(e.name.length > 10 ? '${e.name.substring(0, 8)}...' : e.name, style: KL.t(size: 17), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 8),
-            _Avatar(e.avatar, size: 76, ring: ring),
-            Transform.translate(
-              offset: const Offset(0, -12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 1),
-                decoration: BoxDecoration(color: badge, borderRadius: BorderRadius.circular(10)),
-                child: Text('#$rank', style: KL.t(size: 13, w: FontWeight.w700, color: rank == 1 ? Colors.white : const Color(0xFF333333))),
-              ),
-            ),
-            Text('${e.pts}', style: KL.t(size: 20, w: FontWeight.w700)),
-            Text('PTS', style: KL.t(size: 16)),
+            Expanded(child: _slot(list[1], 2, 104, FK.silver)),
+            const SizedBox(width: 8),
+            Expanded(child: _slot(list[0], 1, 134, FK.gold)),
+            const SizedBox(width: 8),
+            Expanded(child: _slot(list[2], 3, 80, FK.bronze)),
           ],
         ),
       ),
     );
   }
-}
 
-class _BracketPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = const Color(0x88DDE7F0)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final cx = size.width / 2;
-    // Ortadan sağa/sola kollar, uçlar aşağı.
-    final path = Path()
-      ..moveTo(cx - 16, 100)
-      ..lineTo(cx - 60, 100)
-      ..lineTo(cx - 60, 128)
-      ..lineTo(cx - 135, 128)
-      ..lineTo(cx - 135, 170)
-      ..moveTo(cx + 16, 100)
-      ..lineTo(cx + 60, 100)
-      ..lineTo(cx + 60, 128)
-      ..lineTo(cx + 135, 128)
-      ..lineTo(cx + 135, 170);
-    canvas.drawPath(path, p);
+  Widget _slot(LbEntry e, int rank, double pedestal, Color medal) {
+    final size = rank == 1 ? 76.0 : 62.0;
+    return GestureDetector(
+      onTap: () => onTap(e),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (rank == 1) Icon(Icons.emoji_events_rounded, color: FK.gold, size: 26),
+          Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.bottomCenter,
+            children: [
+              Container(
+                decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: FK.glow(18, color: medal, alpha: 0.5, dy: 4)),
+                child: AvatarCircle(e.name, size: size, ring: medal, ringWidth: 3.5),
+              ),
+              Positioned(bottom: -10, child: Chip2('#$rank', color: medal, fontSize: 11)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: FK.t(size: 14, w: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Container(
+            height: pedestal,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [medal.withValues(alpha: 0.35), FK.glass]),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border.all(color: medal.withValues(alpha: 0.45)),
+            ),
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              children: [
+                Text('${e.pts}', style: FK.t(size: 20, w: FontWeight.w700)),
+                Text('PUAN', style: FK.t(size: 10, w: FontWeight.w600, color: FK.muted, spacing: 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

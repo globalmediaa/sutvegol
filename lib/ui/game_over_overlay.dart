@@ -2,25 +2,26 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../game/kick_legend_game.dart';
+import '../game/frikik_kral_game.dart';
 import '../game/sfx.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
 import 'mock_data.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
-/// Oyun sonu perdesi: karartma, sol üst çıkış, beyaz kart (sayaçla artan skor),
-/// rozet/sıra paneli ve turuncu tekrar butonu. Ölçüler 440 pt referans genişliğe göre.
+/// Oyun sonu perdesi: bulanık karartma, üstte çıkış, cam kart (sayaçla artan
+/// skor, rekor, sahne), sıra paneli ve "TEKRAR OYNA" hap butonu.
 class GameOverOverlay extends StatefulWidget {
   const GameOverOverlay({super.key, required this.game});
-  final KickLegendGame game;
+  final FrikikKralGame game;
 
   @override
   State<GameOverOverlay> createState() => _GameOverOverlayState();
 }
 
 class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderStateMixin {
-  late final AnimationController _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 300))..forward();
+  late final AnimationController _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 320))..forward();
   late final AnimationController _count = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
   bool _rankReady = false;
 
@@ -47,45 +48,35 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
   Widget build(BuildContext context) {
     final game = widget.game;
     final rank = rankFor(lbEntries(LbTab.season), game.score);
+    final isRecord = game.score > 0 && game.score >= game.best;
     return LayoutBuilder(builder: (context, c) {
       final s = c.maxWidth / 440;
+      final top = MediaQuery.paddingOf(context).top;
       return FadeTransition(
         opacity: _fade,
         child: Stack(
           children: [
-            Positioned.fill(child: ColoredBox(color: KL.dim.withValues(alpha: 0.72))),
-            // Sol üst çıkış.
+            const DimBackdrop(),
             Positioned(
               left: 18 * s,
-              top: 47 * s,
-              child: GestureDetector(
-                onTap: () => game.onExit?.call(),
-                child: Image.asset('assets/images/btn_exit.png', width: 94 * s),
+              top: top + 12 * s,
+              child: RoundButton(icon: Icons.logout_rounded, size: 50 * s, onTap: () => game.onExit?.call()),
+            ),
+            Positioned(
+              left: 24 * s,
+              right: 24 * s,
+              top: 250 * s,
+              child: ScaleTransition(
+                scale: CurvedAnimation(parent: _fade, curve: Curves.easeOutBack),
+                child: _card(s, game, rank, isRecord),
               ),
             ),
-            // Kart.
             Positioned(
-              left: 30 * s,
-              top: 297 * s,
-              width: 380 * s,
-              height: 287 * s,
-              child: _card(s, game, rank),
-            ),
-            // Tekrar butonu (kartın alt kenarına biner).
-            Positioned(
-              left: 220 * s - 47 * s,
-              top: 587 * s - 47 * s,
-              child: GestureDetector(
-                onTap: game.restart,
-                child: Container(
-                  width: 95 * s,
-                  height: 95 * s,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 12 * s, offset: Offset(0, 6 * s))],
-                  ),
-                  child: Image.asset('assets/images/btn_replay.png'),
-                ),
+              left: 0,
+              right: 0,
+              top: 560 * s,
+              child: Center(
+                child: PillButton(label: 'TEKRAR OYNA', icon: Icons.replay_rounded, onTap: game.restart, height: 60 * s, fontSize: 19 * s),
               ),
             ),
           ],
@@ -94,106 +85,100 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
     });
   }
 
-  Widget _card(double s, KickLegendGame game, int rank) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14 * s),
-      child: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            Container(
-              height: 37 * s,
-              color: const Color(0xFFCFCFCF),
-              alignment: Alignment.center,
-              child: Text(
-                'GAME OVER',
-                style: KL.t(size: 22 * s, w: FontWeight.w700, color: Colors.white, spacing: 1.5 * s).copyWith(
-                  shadows: [Shadow(color: Colors.black26, offset: Offset(0, 1 * s), blurRadius: 2 * s)],
-                ),
-              ),
+  Widget _card(double s, FrikikKralGame game, int rank, bool isRecord) {
+    return GlassCard(
+      radius: 26 * s,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 46 * s,
+            decoration: BoxDecoration(
+              gradient: FK.fire,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(26 * s)),
             ),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AnimatedBuilder(
-                      animation: _count,
-                      builder: (_, __) {
-                        final k = Curves.easeOutCubic.transform(_count.value);
-                        final sc = (game.score * k).round();
-                        final bs = max(sc, (game.best * k).round());
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _ledRow(s, 'ico_ball.png', sc),
-                            SizedBox(height: 14 * s),
-                            _ledRow(s, 'ico_trophy.png', bs),
-                            SizedBox(height: 40 * s),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  // Sağ panel: avatar, sıra, puan, chevron.
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => LeaderboardScreen(myScore: game.score)),
-                    ),
-                    child: Container(
-                      width: 125 * s,
-                      color: KL.cardGray,
-                      child: Stack(
+            alignment: Alignment.center,
+            child: Text('OYUN BİTTİ', style: FK.t(size: 20 * s, w: FontWeight.w700, spacing: 3 * s)),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(20 * s, 18 * s, 16 * s, 22 * s),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: AnimatedBuilder(
+                    animation: _count,
+                    builder: (_, child) {
+                      final k = Curves.easeOutCubic.transform(_count.value);
+                      final sc = (game.score * k).round();
+                      final bs = max(sc, (game.best * k).round());
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          Text('SKOR', style: FK.t(size: 12 * s, w: FontWeight.w600, color: FK.muted, spacing: 2 * s)),
+                          SizedBox(height: 4 * s),
+                          LedDigits(value: sc, height: 36 * s, width: 190 * s, color: Colors.white),
+                          SizedBox(height: 14 * s),
+                          Row(
                             children: [
-                              SizedBox(height: 18 * s),
-                              Container(
-                                width: 74 * s,
-                                height: 74 * s,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3 * s),
-                                  image: const DecorationImage(image: AssetImage('assets/images/avatar_you.png'), fit: BoxFit.cover),
-                                ),
-                              ),
-                              Transform.translate(
-                                offset: Offset(0, -8 * s),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 1 * s),
-                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10 * s)),
-                                  child: Text('#${_rankReady ? rank : 0}', style: KL.t(size: 11 * s, w: FontWeight.w600, color: const Color(0xFF333333))),
-                                ),
-                              ),
-                              LedDigits(value: _rankReady ? game.score : 0, height: 13 * s, width: 44 * s),
+                              Icon(Icons.emoji_events_rounded, color: FK.gold, size: 16 * s),
+                              SizedBox(width: 6 * s),
+                              Text('REKOR', style: FK.t(size: 12 * s, w: FontWeight.w600, color: FK.muted, spacing: 2 * s)),
+                              if (isRecord && _rankReady) ...[
+                                SizedBox(width: 8 * s),
+                                Chip2('YENİ!', color: FK.green, fontSize: 10 * s),
+                              ],
                             ],
                           ),
-                          Positioned(
-                            right: 8 * s,
-                            bottom: 8 * s,
-                            child: Icon(Icons.chevron_right, size: 16 * s, color: const Color(0xFF555555)),
+                          SizedBox(height: 4 * s),
+                          LedDigits(value: bs, height: 26 * s, width: 140 * s, color: FK.gold),
+                          SizedBox(height: 12 * s),
+                          Row(
+                            children: [
+                              Container(width: 8 * s, height: 8 * s, decoration: BoxDecoration(shape: BoxShape.circle, color: game.stage.accent)),
+                              SizedBox(width: 6 * s),
+                              Text(game.stage.label, style: FK.t(size: 12 * s, w: FontWeight.w700, color: game.stage.accent, spacing: 2 * s)),
+                            ],
                           ),
                         ],
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+                _rankPanel(s, game, rank),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _ledRow(double s, String icon, int value) => Padding(
-        padding: EdgeInsets.only(left: 16 * s),
-        child: Row(
-          children: [
-            Image.asset('assets/images/$icon', width: 30 * s, height: 30 * s),
-            SizedBox(width: 16 * s),
-            LedDigits(value: value, height: 32 * s, width: 160 * s),
-          ],
+  Widget _rankPanel(double s, FrikikKralGame game, int rank) => GestureDetector(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LeaderboardScreen(myScore: game.score))),
+        child: Container(
+          width: 128 * s,
+          padding: EdgeInsets.symmetric(vertical: 14 * s),
+          decoration: BoxDecoration(color: FK.glass, borderRadius: BorderRadius.circular(18 * s), border: Border.all(color: FK.glassBorder)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AvatarCircle(kMeHandle, size: 64 * s, ring: FK.orange, ringWidth: 3 * s),
+              Transform.translate(
+                offset: Offset(0, -10 * s),
+                child: Chip2('#${_rankReady ? rank : '—'}', fontSize: 11 * s),
+              ),
+              Text('SIRALAMA', style: FK.t(size: 10 * s, w: FontWeight.w600, color: FK.muted, spacing: 1.5 * s)),
+              SizedBox(height: 4 * s),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Gör', style: FK.t(size: 13 * s, w: FontWeight.w700, color: FK.amber)),
+                  Icon(Icons.chevron_right_rounded, size: 18 * s, color: FK.amber),
+                ],
+              ),
+            ],
+          ),
         ),
       );
 }

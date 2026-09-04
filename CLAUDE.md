@@ -1,35 +1,45 @@
-# Kick Legend — Flutter/Flame
+# Frikik Kral (Free Kick King) — Flutter/Flame
 
-Videodan birebir kopyalanan "hedefe şut" oyunu (KICK LEGEND) + etrafındaki arayüzler. Samet'in kararı: aynı grafikler, aynı mekanik, aynı menüler.
+Hedefe şut oyunu: kaydır → top kaleye uçar → halkaya isabet puan getirir. Skor arttıkça sahne
+**Sokak → Halı Saha → Stadyum** olarak değişir. Tüm görseller koddan çizilir (telifsiz),
+sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynaktan alınmaz.
 
 ## Yapı
-- `lib/main.dart` — MaterialApp, GameWidget + `gameOver` overlay'i, çıkış akışı (kırmızı Loading → oyun baştan).
-- `lib/game/geometry.dart` — sanal çözünürlük 1320x2868 (kaynak video), geniş/yakın görünüm ölçüleri (`kWide`, `kZoom`).
-- `lib/game/kick_legend_game.dart` — durum makinesi, skor/can, seri + FEVER, 2 kaleci, direk sekmesi, kamera geçişi, zamanlayıcı.
-- `lib/game/scene.dart` — Background, Ball (soldan yuvarlanma / bezier eğrili uçuş / düşme), TargetComp, Keeper, RestingBall, NetRipple, ScorePopup.
-- `lib/game/fever.dart` — FEVER parıltı katmanı (bokeh, yıldız, altın yazı) ve bitiş halkası.
-- `lib/game/hud.dart` — tabela (led.dart ile), kalpler, InputLayer (swipe → iniş noktası + parmağın ilk yönü = falso).
+- `lib/main.dart` — MaterialApp (lacivert tema), GameWidget + `gameOver`/`pause` overlay'leri, çıkış akışı (Yükleniyor → oyun baştan).
+- `lib/game/geometry.dart` — sanal çözünürlük 1320x2868, `Stage` enum'u (etiket, skor eşiği, vurgu rengi), geniş/yakın görünüm ölçüleri (`kWide`, `kZoom`, tabela/kalp konumları), `kPauseRect`.
+- `lib/game/scene_art.dart` — **prosedürel sanat**: sahne × kamera arka planları (`SceneArt.background`), açılış göğü, top görseli (kesik ikosahedron izdüşümü), kalp/hedef/kaleci çizimleri. Arka planlar `ui.Image` olarak üretilip Flame `images` cache'ine `bg_<stage>_<view>` anahtarıyla eklenir.
+- `lib/game/frikik_kral_game.dart` — durum makinesi, skor/can, seri + Kral Modu, 2 kaleci, direk sekmesi, kamera geçişi, **sahne geçişi** (`_enterStage`: yeni bg üretimi → crossfade → afiş → ambiyans), zamanlayıcı.
+- `lib/game/scene.dart` — Background (crossfade), Ball (yuvarlanma / bezier uçuş / düşme), TargetComp (sahne rengine göre halka), Keeper (manken), RestingBall, NetRipple, ScorePopup.
+- `lib/game/fever.dart` — Kral Modu parıltı katmanı + taçlı "KRAL MODU" levhası, bitiş halkası, `StageBanner` ("YENİ SAHNE").
+- `lib/game/hud.dart` — LED tabela rakamları, kalpler, InputLayer (swipe → iniş noktası + falso).
 - `lib/game/led.dart` — 7-segment çizim; hem Flame hem Flutter tarafı kullanır.
-- `lib/game/splash.dart` — gök + Loading spinner → logo alttan yükselir → sahaya pan.
-- `lib/ui/` — game_over_overlay (kart, sayaçlı skor, sıra rozeti, tekrar), pause_overlay (ses/titreşim toggle, çıkış+yeniden başlat, Play), leaderboard_screen (sekmeler, sabit logo+You, podyum, liste), profile_dialog (saha/karatahta kartı, beğeni, 5'li rozet carousel'i), loading_screen (kırmızı), mock_data (yerel liste + 37 rozet), theme.
-- `assets/images/` — videodan kesilmiş sprite'lar; `assets/fonts/` Titillium Web.
+- `lib/game/splash.dart` — gece göğü + Yükleniyor → logo alev iziyle belirir, köz parçacıkları → sahaya pan.
+- `lib/game/sfx.dart` — flame_audio; sahneye göre ambiyans (`amb_<stage>.wav`), Kral Modu döngüsü, efektler.
+- `lib/ui/theme.dart` (`FK` paleti: lacivert + turuncu/amber), `logo.dart` (paintLogo/paintCrown — Flame ve Flutter ortak), `widgets.dart` (GlassCard, PillButton, RoundButton, AvatarCircle (isimden üretilen), ToggleRow, LogoWidget), `game_over_overlay.dart`, `pause_overlay.dart`, `leaderboard_screen.dart`, `profile_dialog.dart`, `loading_screen.dart`, `led_painter.dart`, `mock_data.dart` (yerel liste + 37 rozet).
+- `assets/fonts/` Titillium Web (OFL). `assets/audio/` — `tools/make_audio.py` ile üretilir.
 
 ## Mekanik notları
-- Şut: nişan = kaydırma yönü (top kale çizgisine kadar o doğrultuda), yükseklik = güç (hız 0.55 + uzunluk 0.45). Falso: çıkışta yanal bileşen 1.9× abartılır, bezier ile inişe geri büker (videoda dx/dy oranı sona doğru dikleşiyor). Uçuş 0.67 s, gerçek 3D: yer izi (gölge) ekranda 1-(1-z)^1.4 ile ilerler, boyut zamanla doğrusal 1→0.2, dünya yüksekliği = 4·380·z(1−z) + hEnd·z (top-birimi px; 1000 px ≈ 1 m). Top merkezi = yer − r − h·ölçek; gölge yerde, yükseldikçe küçülüp soluklaşır.
-- Kale sonrası: top fileden aşağı düşer (0.32 s, sekme), kalenin dibinde kalır; 0.5 s sonra hedef küçülerek yok olur + "+30" + skor. Auta giden top görüş dışına uçar.
-- İsabet +30 (fever'da +60), file dalgası, popup. Iskalama/kaleci = 1 kalp, seri sıfırlanır. Direk/üst direk: top düşer, yerde hedefe denk gelirse sayılır.
-- 5 ardışık isabet → FEVER 10 s (altın top, parıltı, FEVER yazısı); iskalama veya süre → patlama halkası.
+- Şut: nişan = kaydırma yönü, yükseklik = güç (hız 0.75 + uzunluk 0.25). Falso: parmak yayının kirişten sapması bezier ile topun yer izine ölçeklenir. Uçuş 0.58 s, gerçek 3D: gölge yerde ilerler, boyut doğrusal küçülür, yükseklik parabol + hedef yüksekliği.
+- Kale sonrası: top fileden aşağı düşer, kale dibinde kalır; 0.5 s sonra hedef küçülerek yok olur + "+30" + skor. Auta giden top görüş dışına uçar.
+- İsabet +30 (Kral Modu'nda +60). Iskalama/kaleci = 1 kalp, seri sıfırlanır. Direk/üst direk: top düşer, yerde hedefe denk gelirse sayılır.
+- 5 ardışık isabet → **Kral Modu** 10 s (altın top, parıltı, taçlı levha); iskalama veya süre → patlama halkası.
 - Kaleci 1: 30 puan; kaleci 2: 420 puan. Genlik kale genişliği + 110 px, periyot skorla kısalır.
-- Her şuttan sonra %40 geniş ↔ yakın kamera.
-- Leaderboard verisi yerel (`mock_data.dart`); sunucu bağlanınca `lbEntries` değiştirilecek.
+- **Sahneler:** Sokak 0+, Halı Saha 300+, Stadyum 900+ (`Stage.minScore`). Geçiş bir sonraki topta: geniş kamera, crossfade, "YENİ SAHNE" afişi, fanfar, ambiyans değişimi. Yeniden başlatmada sokağa dönülür.
+- Her şuttan sonra %40 geniş ↔ yakın kamera (aynı sahnenin diğer görünümü).
+- Leaderboard verisi yerel (`mock_data.dart`); sunucu bağlanınca `lbEntries` değiştirilecek. Avatarlar isimden üretilir (fotoğraf yok).
 
 ## Geliştirme bayrakları
 - `--dart-define=AUTOPLAY=true` → oyun kendi kendine oynar.
 - `--dart-define=UI_PREVIEW=leaderboard|profile` → ekranı doğrudan açar.
-- `--dart-define=FEVER_TEST=true` → ilk toptan itibaren fever.
+- `--dart-define=FEVER_TEST=true` → ilk toptan itibaren Kral Modu.
+- `--dart-define=STAGE=cage|stadium` → o sahneden başlar.
 
 ## Ses
-- `lib/game/sfx.dart` (flame_audio). Klipler `assets/audio/` — 17:18 videosunun ses kanalından kesildi (kick, hit, miss, roll, fever start/hit/end, gameover, count_end, splash). Ses ayarı pause menüsünden; arka plan müziği yok (videoda ayrıştırılamadı).
+- Tümü sentez: `python3 tools/make_audio.py` → `assets/audio/` (22.05 kHz mono). Vuruş, isabet çanı, iskalama, yuvarlanma, Kral Modu başla/isabet/bitiş + alev döngüsü, oyun bitti, sayaç, açılış, sahne fanfarı, 3 ambiyans (sokak trafiği / gece halı saha / tribün).
+
+## Kimlik
+- Uygulama adı: **Frikik Kral**. Paket `frikik_kral`, iOS bundle `com.globalmedia.frikikKral`, Android `com.globalmedia.frikik_kral`. İkonlar: lacivert zemin, taç + top (PIL ile üretildi).
+- Klasör adı hâlâ `kick-legend` (yerel yol; istenirse ayrıca taşınır).
 
 ## Test / dağıtım
 - `flutter test` — swipe → şut widget testi.

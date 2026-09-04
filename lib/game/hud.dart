@@ -4,25 +4,21 @@ import 'dart:ui' hide TextStyle;
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
+import 'frikik_kral_game.dart';
 import 'geometry.dart';
-import 'kick_legend_game.dart';
 import 'led.dart';
+import 'scene_art.dart';
 
 /// 7-segment LED rakamlar + kalpler (arka plandaki tabela üzerine çizilir).
-class Scoreboard extends PositionComponent with HasGameReference<KickLegendGame> {
+class Scoreboard extends PositionComponent with HasGameReference<FrikikKralGame> {
   Scoreboard() : super(priority: 30);
 
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color yellow = Color(0xFFFFE561);
+  static const Color white = Color(0xFFF5F7FF);
+  static const Color amber = Color(0xFFFFB13B);
+  static const Color heartRed = Color(0xFFFF3B5C);
 
-  late Sprite _heart;
   double _scoreFlash = 1;
   double _heartFlash = 1;
-
-  @override
-  Future<void> onLoad() async {
-    _heart = Sprite(game.images.fromCache('heart.png'));
-  }
 
   void flashScore() => _scoreFlash = 0;
   void flashHeart() => _heartFlash = 0;
@@ -37,8 +33,8 @@ class Scoreboard extends PositionComponent with HasGameReference<KickLegendGame>
   void render(Canvas canvas) {
     final g = game.view;
     final pulse = _scoreFlash < 1 ? 1 + 0.14 * sin(_scoreFlash * pi) : 1.0;
-    _drawRow(canvas, g.scoreRect, game.score, white, g.skew, pulse);
-    _drawRow(canvas, g.bestRect, game.best, yellow, g.skew, 1);
+    _drawRow(canvas, g.scoreRect, game.score, white, pulse);
+    _drawRow(canvas, g.bestRect, game.best, amber, 1);
 
     final hs = g.heartScale;
     for (var i = 0; i < 3; i++) {
@@ -46,18 +42,16 @@ class Scoreboard extends PositionComponent with HasGameReference<KickLegendGame>
       final alive = i < game.lives;
       final justLost = !alive && i == game.lives && _heartFlash < 1;
       final blinkOn = justLost && ((_heartFlash * 10).floor() % 2 == 0);
-      final paint = Paint();
-      if (!alive && !blinkOn) {
-        paint.colorFilter = const ColorFilter.mode(Color(0xFF2E2E2E), BlendMode.srcIn);
-      }
-      _heart.render(canvas, position: c, size: Vector2(57 * hs, 50 * hs), anchor: Anchor.center, overridePaint: paint);
+      canvas.save();
+      canvas.translate(c.x, c.y);
+      SceneArt.paintHeart(canvas, 54 * hs, 48 * hs, heartRed, dead: !alive && !blinkOn);
+      canvas.restore();
     }
   }
 
-  void _drawRow(Canvas canvas, Rect rect, int value, Color color, double skew, double pulse) {
+  void _drawRow(Canvas canvas, Rect rect, int value, Color color, double pulse) {
     canvas.save();
     canvas.translate(rect.left, rect.top);
-    if (skew != 0) canvas.skew(0, skew);
     if (pulse != 1) {
       canvas.translate(rect.width / 2, rect.height / 2);
       canvas.scale(pulse);
@@ -70,7 +64,7 @@ class Scoreboard extends PositionComponent with HasGameReference<KickLegendGame>
 
 /// Tüm ekranı kaplayan dokunma katmanı: kaydırma = şut, sağ üst = pause.
 class InputLayer extends PositionComponent
-    with HasGameReference<KickLegendGame>, DragCallbacks, TapCallbacks {
+    with HasGameReference<FrikikKralGame>, DragCallbacks, TapCallbacks {
   InputLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 40);
 
   Vector2? _start;
@@ -156,4 +150,3 @@ class InputLayer extends PositionComponent
     game.kick(vec, dev, tMax, power);
   }
 }
-

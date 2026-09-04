@@ -53,7 +53,7 @@ void drawSevenSegmentDigit(Canvas canvas, int d, double dw, double h, Color colo
   final bits = kSevenSegDigits[d];
   for (var i = 0; i < 7; i++) {
     final lit = (bits >> (6 - i)) & 1 == 1;
-    if (!lit && off == null && color.alpha == 0) continue;
+    if (!lit && off == null && color.a == 0) continue;
     canvas.drawRRect(RRect.fromRectAndRadius(segs[i].deflate(1.2), r), lit ? onPaint : offPaint);
   }
 }

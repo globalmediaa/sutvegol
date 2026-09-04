@@ -9,6 +9,7 @@ import 'fever.dart';
 import 'geometry.dart';
 import 'hud.dart';
 import 'scene.dart';
+import 'scene_art.dart';
 import 'sfx.dart';
 import 'splash.dart';
 
@@ -17,8 +18,11 @@ enum GameState { splash, idle, flying, resolving, paused, gameOver }
 /// Geliştirme: `--dart-define=AUTOPLAY=true` ile oyun kendi kendine şut atar.
 const bool kAutoplay = bool.fromEnvironment('AUTOPLAY');
 
-/// Geliştirme: `--dart-define=FEVER_TEST=true` ilk toptan itibaren fever açar.
+/// Geliştirme: `--dart-define=FEVER_TEST=true` ilk toptan itibaren Kral Modu açar.
 const bool kFeverTest = bool.fromEnvironment('FEVER_TEST');
+
+/// Geliştirme: `--dart-define=STAGE=cage|stadium` ile o sahneden başlar.
+const String kStageOverride = String.fromEnvironment('STAGE');
 
 /// Flutter tarafındaki perdelerin overlay anahtarları.
 const String kGameOverOverlay = 'gameOver';
@@ -30,8 +34,8 @@ class _Scheduled {
   final void Function() fn;
 }
 
-class KickLegendGame extends FlameGame {
-  KickLegendGame()
+class FrikikKralGame extends FlameGame {
+  FrikikKralGame()
       : super(
           camera: CameraComponent.withFixedResolution(
             width: kWorldW,
@@ -42,12 +46,14 @@ class KickLegendGame extends FlameGame {
   final Random rng = Random();
 
   ViewGeom view = kWide;
+  Stage stage = Stage.street;
+  Stage? _pendingStage;
   GameState state = GameState.splash;
   int score = 0;
   int best = 0;
   int lives = 3;
 
-  // Seri / fever.
+  // Seri / Kral Modu.
   int streak = 0;
   bool fever = false;
   double feverTime = 0;
@@ -73,29 +79,27 @@ class KickLegendGame extends FlameGame {
   final List<_Scheduled> _queue = [];
 
   @override
-  Color backgroundColor() => const Color(0xFF000000);
+  Color backgroundColor() => const Color(0xFF0B1226);
 
   @override
   Future<void> onLoad() async {
     camera.viewfinder.anchor = Anchor.topLeft;
-    await images.loadAll([
-      'bg_wide.png',
-      'bg_zoom.png',
-      'splash_bg.png',
-      'logo.png',
-      'ball.png',
-      'ball_gold.png',
-      'target.png',
-      'keeper.png',
-      'heart.png',
-    ]);
+    if (kStageOverride.isNotEmpty) {
+      stage = Stage.values.firstWhere((s) => s.name == kStageOverride, orElse: () => Stage.street);
+    }
+    // Tüm görseller koddan üretilir (scene_art.dart).
+    images.add('ball', await SceneArt.ball());
+    images.add('ball_king', await SceneArt.ball(king: true));
+    images.add('splash_sky', await SceneArt.splashSky());
+    await _prepareStage(stage);
+
     _prefs = await SharedPreferences.getInstance();
     best = _prefs?.getInt('best') ?? 0;
     soundOn = _prefs?.getBool('sound') ?? true;
     hapticsOn = _prefs?.getBool('haptics') ?? true;
     Sfx.enabled = soundOn;
     await Sfx.preload();
-    Sfx.startAmbience();
+    Sfx.startAmbience(stage);
 
     scene = SceneRoot()..position = Vector2(0, kWorldH);
     background = Background();
@@ -112,6 +116,22 @@ class KickLegendGame extends FlameGame {
     input = InputLayer();
     splash = SplashLayer();
     world.addAll([scene, input, splash!]);
+  }
+
+  /// Sahnenin iki kamera görünümünü üretip görsel cache'ine koyar.
+  Future<void> _prepareStage(Stage s) async {
+    for (final g in [kWide, kZoom]) {
+      final key = g.bgKey(s);
+      if (images.containsKey(key)) continue;
+      images.add(key, await SceneArt.background(s, g));
+    }
+  }
+
+  void _dropStage(Stage s) {
+    for (final g in [kWide, kZoom]) {
+      final key = g.bgKey(s);
+      if (images.containsKey(key)) images.clear(key);
+    }
   }
 
   // ---------------------------------------------------------------- akış
@@ -196,7 +216,7 @@ class KickLegendGame extends FlameGame {
 
   void setSound(bool v) {
     soundOn = v;
-    Sfx.setEnabled(v);
+    Sfx.setEnabled(v, stage);
     _prefs?.setBool('sound', v);
   }
 
@@ -244,7 +264,7 @@ class KickLegendGame extends FlameGame {
       return;
     }
     _pendingHit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.55;
-    if (_pendingHit) scene.add(NetRipple(target.position.clone()));
+    if (_pendingHit) scene.add(NetRipple(target.position.clone(), stage.accent));
     final rNet = kBallDiameter / 2 * g.ballGoalScale * 0.85;
     ball.settleInNet(end, Vector2(end.x, g.groundY + 18 - rNet), g.ballGoalScale * 0.85);
   }
@@ -275,6 +295,12 @@ class KickLegendGame extends FlameGame {
   void _scheduleNextBall(double delay) {
     schedule(delay, () {
       if (lives == 0) return;
+      final next = _pendingStage;
+      if (next != null) {
+        _pendingStage = null;
+        _enterStage(next);
+        return;
+      }
       if (rng.nextDouble() < 0.4) {
         switchView(view == kWide ? kZoom : kWide);
         schedule(0.45, ball.enter);
@@ -282,6 +308,25 @@ class KickLegendGame extends FlameGame {
         ball.enter();
       }
     });
+  }
+
+  /// Sahne geçişi: yeni arka planlar üretilir, geniş kameraya dönülür,
+  /// afiş + ses; top kısa süre sonra gelir.
+  Future<void> _enterStage(Stage next) async {
+    final prev = stage;
+    await _prepareStage(next);
+    if (state == GameState.gameOver) return;
+    stage = next;
+    view = kWide;
+    background.crossfadeTo(view.bgKey(stage));
+    scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
+    target.spawn(immediate: true);
+    scene.add(StageBanner(next));
+    Sfx.stageUp();
+    Sfx.startAmbience(stage);
+    haptic(HapticFeedback.heavyImpact);
+    schedule(1.2, ball.enter);
+    schedule(1.0, () => _dropStage(prev));
   }
 
   void _hit(Vector2 end, double r) {
@@ -308,6 +353,8 @@ class KickLegendGame extends FlameGame {
     schedule(0.7, () => target.spawn());
 
     if (!fever && streak >= feverStreak) startFever();
+    final ns = Stage.forScore(score);
+    if (ns.index > stage.index && _pendingStage == null) _pendingStage = ns;
     _afterShot();
   }
 
@@ -354,7 +401,7 @@ class KickLegendGame extends FlameGame {
 
   void switchView(ViewGeom next) {
     view = next;
-    background.crossfadeTo(next.bg);
+    background.crossfadeTo(next.bgKey(stage));
     scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
     target.spawn(immediate: true);
   }
@@ -384,13 +431,29 @@ class KickLegendGame extends FlameGame {
     lives = 3;
     streak = 0;
     fever = false;
+    _pendingStage = null;
+    Sfx.stopFeverLoop();
     scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
     for (final k in keepers) {
       k.deactivate();
     }
+    state = GameState.resolving;
+    final first = kStageOverride.isNotEmpty ? stage : Stage.street;
+    if (stage != first) {
+      final prev = stage;
+      _prepareStage(first).then((_) {
+        stage = first;
+        view = kWide;
+        background.crossfadeTo(view.bgKey(stage));
+        target.spawn(immediate: true);
+        Sfx.startAmbience(stage);
+        schedule(0.5, ball.enter);
+        schedule(1.0, () => _dropStage(prev));
+      });
+      return;
+    }
     if (view != kWide) switchView(kWide);
     target.spawn(immediate: true);
-    state = GameState.resolving;
     ball.enter();
   }
 

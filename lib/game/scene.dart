@@ -5,14 +5,15 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'geometry.dart';
-import 'kick_legend_game.dart';
+import 'frikik_kral_game.dart';
+import 'scene_art.dart';
 import 'sfx.dart';
 
 double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 double _lerp(double a, double b, double t) => a + (b - a) * t;
 
 /// Arka plan: geniş / yakın sahne, çapraz geçiş.
-class Background extends PositionComponent with HasGameReference<KickLegendGame> {
+class Background extends PositionComponent with HasGameReference<FrikikKralGame> {
   Background() : super(size: Vector2(kWorldW, kWorldH), priority: 0);
 
   late Sprite _current;
@@ -22,11 +23,12 @@ class Background extends PositionComponent with HasGameReference<KickLegendGame>
 
   @override
   Future<void> onLoad() async {
-    _current = Sprite(game.images.fromCache(game.view.bg));
+    _current = Sprite(game.images.fromCache(game.view.bgKey(game.stage)));
   }
 
-  void crossfadeTo(String asset) {
-    _next = Sprite(game.images.fromCache(asset));
+  void crossfadeTo(String key) {
+    if (_next != null) _current = _next!;
+    _next = Sprite(game.images.fromCache(key));
     _fade = 0;
   }
 
@@ -59,7 +61,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 
 /// Oyuncunun topu: soldan yuvarlanarak gelir, bekler, fırlatılır, kaleye
 /// küçülerek (hafif muz eğrisiyle) uçar; direğe çarparsa düşer.
-class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
+class Ball extends PositionComponent with HasGameReference<FrikikKralGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
   static const double flightDur = 0.58;
@@ -94,8 +96,8 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
 
   @override
   Future<void> onLoad() async {
-    _sprite = Sprite(game.images.fromCache('ball.png'));
-    _gold = Sprite(game.images.fromCache('ball_gold.png'));
+    _sprite = Sprite(game.images.fromCache('ball'));
+    _gold = Sprite(game.images.fromCache('ball_king'));
     size = Vector2.all(kBallDiameter);
   }
 
@@ -292,14 +294,14 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 10 * hN),
     );
 
-    // Fever: altın top + parıltı halkası.
+    // Kral Modu: altın top + alev halkası.
     final fever = game.fever;
     if (fever) {
       canvas.drawCircle(
         Offset.zero,
         radius * 1.45,
         Paint()
-          ..color = const Color(0x88FFF07A)
+          ..color = const Color(0x99FFB13B)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26),
       );
       canvas.drawCircle(
@@ -328,17 +330,16 @@ class Ball extends PositionComponent with HasGameReference<KickLegendGame> {
 }
 
 /// Kaledeki hedef.
-class TargetComp extends PositionComponent with HasGameReference<KickLegendGame> {
+class TargetComp extends PositionComponent with HasGameReference<FrikikKralGame> {
   TargetComp() : super(anchor: Anchor.center, priority: 8);
 
-  late Sprite _sprite;
   bool visible = false;
   double _pop = 1;
   Vector2? _last;
+  double _spin = 0;
 
   @override
   Future<void> onLoad() async {
-    _sprite = Sprite(game.images.fromCache('target.png'));
     size = Vector2.all(kTargetDiameter);
   }
 
@@ -378,6 +379,7 @@ class TargetComp extends PositionComponent with HasGameReference<KickLegendGame>
 
   @override
   void update(double dt) {
+    _spin += dt * 0.8;
     if (visible && _pop < 1) _pop = min(1, _pop + dt / 0.18);
     if (_shrink >= 0) {
       _shrink += dt / 0.16;
@@ -397,13 +399,24 @@ class TargetComp extends PositionComponent with HasGameReference<KickLegendGame>
     canvas.save();
     canvas.translate(size.x / 2, size.y / 2);
     canvas.scale(s);
-    _sprite.render(canvas, size: size, anchor: Anchor.center);
+    SceneArt.paintTarget(canvas, kTargetDiameter / 2, game.stage.accent, 1);
+    // Dönen kesik dış halka (canlılık).
+    canvas.rotate(_spin);
+    final r = kTargetDiameter / 2 * 1.02;
+    final dash = Paint()
+      ..color = const Color(0xCCFFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 4; i++) {
+      canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: r), i * pi / 2, 0.6, false, dash);
+    }
     canvas.restore();
   }
 }
 
 /// Ray üstünde kayan siyah manken (kaleci). Birden fazla olabilir.
-class Keeper extends PositionComponent with HasGameReference<KickLegendGame> {
+class Keeper extends PositionComponent with HasGameReference<FrikikKralGame> {
   Keeper({this.phaseOffset = 0, this.periodScale = 1}) : super(priority: 10);
 
   static const double railLen = 536;
@@ -415,16 +428,10 @@ class Keeper extends PositionComponent with HasGameReference<KickLegendGame> {
   final double phaseOffset;
   final double periodScale;
 
-  late Sprite _sprite;
   bool active = false;
   double _t = 0;
   double _appear = 0;
   double cx = 0;
-
-  @override
-  Future<void> onLoad() async {
-    _sprite = Sprite(game.images.fromCache('keeper.png'));
-  }
 
   void activate() {
     if (active) return;
@@ -468,26 +475,27 @@ class Keeper extends PositionComponent with HasGameReference<KickLegendGame> {
       Rect.fromLTWH(railLeft, g.railY, railLen * s, railH * s),
       Radius.circular(6 * s),
     );
-    canvas.drawRRect(rail, Paint()..color = Color.fromRGBO(24, 24, 24, k));
+    canvas.drawRRect(rail, Paint()..color = Color.fromRGBO(42, 46, 56, k));
     canvas.drawRect(
-      Rect.fromLTWH(railLeft, g.railY, railLen * s, 5 * s),
-      Paint()..color = Color.fromRGBO(70, 70, 70, k),
+      Rect.fromLTWH(railLeft, g.railY, railLen * s, 6 * s),
+      Paint()..color = Color.fromRGBO(120, 128, 145, k),
     );
+    final cap = Paint()..color = game.stage.accent.withValues(alpha: k);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(railLeft, g.railY, 18 * s, railH * s), Radius.circular(6 * s)), cap);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(railLeft + railLen * s - 18 * s, g.railY, 18 * s, railH * s), Radius.circular(6 * s)), cap);
     final h = keeperH * s;
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(cx - keeperW * s, g.railY - h * k - 2, keeperW * 2 * s, h * k + 4));
-    _sprite.render(
-      canvas,
-      position: Vector2(cx, g.railY + 2),
-      size: Vector2(keeperW * s, h),
-      anchor: Anchor.bottomCenter,
-    );
+    canvas.clipRect(Rect.fromLTWH(cx - keeperW * 1.2 * s, g.railY - h * k - 2, keeperW * 2.4 * s, h * k + 4));
+    canvas.translate(cx, g.railY + 2);
+    // Ray üstünde kayarken hafif salınım.
+    canvas.rotate(sin(_t * 5) * 0.03);
+    SceneArt.paintKeeper(canvas, keeperW * s, h, 1);
     canvas.restore();
   }
 }
 
 /// Kale çizgisinde kalan küçük top.
-class RestingBall extends PositionComponent with HasGameReference<KickLegendGame> {
+class RestingBall extends PositionComponent with HasGameReference<FrikikKralGame> {
   RestingBall(Vector2 pos, double s)
       : super(position: pos, anchor: Anchor.center, priority: 5) {
     scale = Vector2.all(s);
@@ -498,7 +506,7 @@ class RestingBall extends PositionComponent with HasGameReference<KickLegendGame
 
   @override
   Future<void> onLoad() async {
-    _sprite = Sprite(game.images.fromCache('ball.png'));
+    _sprite = Sprite(game.images.fromCache('ball'));
     final others = parent!.children.whereType<RestingBall>().where((b) => b != this).toList();
     if (others.length >= 4) others.first.removeFromParent();
   }
@@ -519,7 +527,8 @@ class RestingBall extends PositionComponent with HasGameReference<KickLegendGame
 
 /// File dalgası: isabet noktasında büyüyen şeffaf halkalar.
 class NetRipple extends PositionComponent {
-  NetRipple(Vector2 pos) : super(position: pos, priority: 12);
+  NetRipple(Vector2 pos, [this.color = const Color(0xFFFFFFFF)]) : super(position: pos, priority: 12);
+  final Color color;
   double _t = 0;
   static const double dur = 0.5;
 
@@ -540,7 +549,7 @@ class NetRipple extends PositionComponent {
         Offset.zero,
         r,
         Paint()
-          ..color = Color.fromRGBO(255, 255, 255, 0.55 * (1 - kk))
+          ..color = color.withValues(alpha: 0.7 * (1 - kk))
           ..style = PaintingStyle.stroke
           ..strokeWidth = 10 * (1 - kk) + 2,
       );
@@ -575,7 +584,7 @@ class ScorePopup extends PositionComponent {
           fontSize: 38,
           fontWeight: FontWeight.w900,
           color: Color.fromRGBO(20, 20, 20, a),
-          fontFamily: 'monospace',
+          fontFamily: 'TitilliumWeb',
         ),
       ).render(canvas, text, p + Vector2(o.dx, o.dy), anchor: Anchor.center);
     }
@@ -584,7 +593,7 @@ class ScorePopup extends PositionComponent {
         fontSize: 38,
         fontWeight: FontWeight.w900,
         color: color.withValues(alpha: a),
-        fontFamily: 'monospace',
+        fontFamily: 'TitilliumWeb',
       ),
     ).render(canvas, text, p, anchor: Anchor.center);
   }

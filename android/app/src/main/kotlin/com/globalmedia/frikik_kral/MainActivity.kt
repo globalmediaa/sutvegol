@@ -1,4 +1,4 @@
-package com.globalmedia.kick_legend
+package com.globalmedia.frikik_kral
 
 import io.flutter.embedding.android.FlutterActivity
 
