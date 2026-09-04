@@ -5,7 +5,7 @@ import 'package:flutter/painting.dart';
 
 import '../game/scene_art.dart';
 
-/// "FRİKİK KRAL" logosu — taç, iki satırlık eğik 3D yazı ve alev izli top.
+/// "ŞUT VE GOL" logosu — taç, iki satırlık eğik 3D yazı ve alev izli top.
 /// Hem Flame (splash) hem Flutter (leaderboard, loading) aynı çizimi kullanır.
 /// [box] logonun sığacağı alan; oran ~2.05:1 olarak çizilir ve ortalanır.
 void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal = 1, bool subtitle = true}) {
@@ -16,9 +16,9 @@ void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal =
   canvas.save();
   canvas.translate(r.left, r.top);
 
-  // Satır 1: FRİKİK (turuncu-amber), satır 2: KRAL (beyaz) + taç.
-  final line1 = _text('FRİKİK', 250 * u, FontWeight.w700);
-  final line2 = _text('KRAL', 250 * u, FontWeight.w700);
+  // Satır 1: ŞUT VE (turuncu-amber), satır 2: GOL (beyaz) + taç.
+  final line1 = _text('ŞUT VE', 250 * u, FontWeight.w700);
+  final line2 = _text('GOL', 250 * u, FontWeight.w700);
   final cx = w / 2;
   final y1 = h * 0.30;
   final y2 = h * 0.72;
@@ -59,7 +59,7 @@ void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal =
   drawLine(line1, y1, const [Color(0xFFFFE08A), Color(0xFFFF9A2E), Color(0xFFFF6A00)], reveal * 1.6);
   drawLine(line2, y2, const [Color(0xFFFFFFFF), Color(0xFFDDE4F5), Color(0xFFB9C3DE)], reveal * 1.6 - 0.35);
 
-  // Taç: KRAL'ın sağ üstünde, hafif yatık.
+  // Taç: GOL'ün sağ üstünde, hafif yatık.
   final ck = ((reveal - 0.45) * 2.2).clamp(0.0, 1.0);
   if (ck > 0) {
     canvas.save();
@@ -92,7 +92,7 @@ void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal =
   }
 
   if (subtitle) {
-    final sub = _text('FREE KICK KING', 46 * u, FontWeight.w600, spacing: 10 * u);
+    final sub = _text('SHOOT & SCORE', 46 * u, FontWeight.w600, spacing: 10 * u);
     sub.paint(canvas, ui.Offset(cx, h * 0.96), const Color(0xFFDDE4F5).withValues(alpha: 0.85 * alpha * reveal.clamp(0, 1)));
   }
   canvas.restore();

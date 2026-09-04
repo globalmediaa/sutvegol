@@ -631,7 +631,7 @@ class SceneArt {
       c.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), Paint()..color = col);
       if (i % 3 == 1) {
         final tp = TextPainter(
-          text: const TextSpan(text: 'FRİKİK KRAL', style: TextStyle(fontFamily: 'TitilliumWeb', fontSize: 44, fontWeight: FontWeight.w700, color: Color(0xFF1B2A6B), letterSpacing: 6)),
+          text: const TextSpan(text: 'ŞUT VE GOL', style: TextStyle(fontFamily: 'TitilliumWeb', fontSize: 44, fontWeight: FontWeight.w700, color: Color(0xFF1B2A6B), letterSpacing: 6)),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(c, Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));
