@@ -56,44 +56,51 @@ class SceneArt {
     return rec.endRecording().toImage(kWorldW.toInt(), h.toInt());
   }
 
-  /// Top: kesik ikosahedron (12 beşgen) izdüşümü, gölgeli küre.
+  /// Top: kesik ikosahedron (12 beşgen) izdüşümü, gölgeli küre (görsel olarak cache'lenir).
   static Future<ui.Image> ball({bool king = false}) {
     const d = kBallDiameter;
     const r = d / 2;
     final rec = ui.PictureRecorder();
     final c = Canvas(rec);
     c.translate(r, r);
+    paintBall(c, r, king: king);
+    return rec.endRecording().toImage(d.toInt(), d.toInt());
+  }
+
+  /// Topu doğrudan bir canvas'a çizer (merkez orijinde, yarıçap [r]).
+  /// Logo ve arayüz gibi görsel cache'i olmayan yerlerde kullanılır.
+  static void paintBall(Canvas c, double r, {bool king = false}) {
+    c.save();
     c.clipPath(Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: r - 0.5)));
     final base = king ? const [Color(0xFFFFF3B8), Color(0xFFF7C23A), Color(0xFFC87A08)] : const [Color(0xFFFFFFFF), Color(0xFFEDF0F6), Color(0xFFB9C1D3)];
     c.drawCircle(
       Offset.zero,
       r,
-      Paint()..shader = ui.Gradient.radial(const Offset(-r * 0.35, -r * 0.4), r * 1.45, base, const [0, 0.5, 1]),
+      Paint()..shader = ui.Gradient.radial(Offset(-r * 0.35, -r * 0.4), r * 1.45, base, const [0, 0.5, 1]),
     );
     final panel = Paint()..color = king ? const Color(0xFF8A4A00) : const Color(0xFF1E2230);
     final seam = Paint()
       ..color = king ? const Color(0xFFB8771A) : const Color(0xFF8A90A3)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
+      ..strokeWidth = max(1.2, r / 49);
     _drawTruncatedIcosahedron(c, r, panel, seam);
-    // Kenar karartması ve parlama.
     c.drawCircle(
       Offset.zero,
       r,
       Paint()
-        ..shader = ui.Gradient.radial(const Offset(-r * 0.3, -r * 0.3), r * 1.35, [
-          const Color(0x00000000),
-          const Color(0x00000000),
-          const Color(0x66000000),
+        ..shader = ui.Gradient.radial(Offset(-r * 0.3, -r * 0.3), r * 1.35, const [
+          Color(0x00000000),
+          Color(0x00000000),
+          Color(0x66000000),
         ], const [0, 0.55, 1]),
     );
     c.drawOval(
-      Rect.fromCenter(center: const Offset(-r * 0.42, -r * 0.48), width: r * 0.6, height: r * 0.36),
+      Rect.fromCenter(center: Offset(-r * 0.42, -r * 0.48), width: r * 0.6, height: r * 0.36),
       Paint()
         ..color = const Color(0x8CFFFFFF)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r / 12),
     );
-    return rec.endRecording().toImage(d.toInt(), d.toInt());
+    c.restore();
   }
 
   static void _drawTruncatedIcosahedron(Canvas c, double r, Paint panel, Paint seam) {

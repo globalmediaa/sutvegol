@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
+import '../game/scene_art.dart';
+
 /// "FRİKİK KRAL" logosu — taç, iki satırlık eğik 3D yazı ve alev izli top.
 /// Hem Flame (splash) hem Flutter (leaderboard, loading) aynı çizimi kullanır.
 /// [box] logonun sığacağı alan; oran ~2.05:1 olarak çizilir ve ortalanır.
@@ -61,10 +63,10 @@ void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal =
   final ck = ((reveal - 0.45) * 2.2).clamp(0.0, 1.0);
   if (ck > 0) {
     canvas.save();
-    canvas.translate(cx + line2.width * 0.44, y2 - line2.height * 0.62 - (1 - ck) * 60 * u);
-    canvas.rotate(0.22);
+    canvas.translate(cx + line2.width * 0.56, y2 - line2.height * 0.50 - (1 - ck) * 60 * u);
+    canvas.rotate(0.2);
     canvas.scale(ck);
-    paintCrown(canvas, 150 * u, alpha: alpha);
+    paintCrown(canvas, 135 * u, alpha: alpha);
     canvas.restore();
   }
 
@@ -72,9 +74,20 @@ void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal =
   final bk = ((reveal - 0.25) * 2).clamp(0.0, 1.0);
   if (bk > 0) {
     canvas.save();
-    canvas.translate(w * 0.95, y1 + 30 * u);
+    canvas.translate(w * 0.94, y1 + 24 * u);
     canvas.scale(bk);
-    _miniBall(canvas, 74 * u, alpha);
+    canvas.rotate(-0.35);
+    // Yumuşak gölge + gerçek top geometrisi.
+    canvas.drawCircle(
+      ui.Offset(4 * u, 8 * u),
+      46 * u,
+      Paint()
+        ..color = const Color(0xFF000000).withValues(alpha: 0.35 * alpha)
+        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 8 * u),
+    );
+    if (alpha < 1) canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
+    SceneArt.paintBall(canvas, 46 * u);
+    if (alpha < 1) canvas.restore();
     canvas.restore();
   }
 
@@ -132,27 +145,6 @@ void paintCrown(ui.Canvas canvas, double size, {double alpha = 1}) {
     final y = x == 0 ? -40.0 : -22.0;
     canvas.drawCircle(ui.Offset(x * s, y * s), 5.5 * s, Paint()..color = const Color(0xFFFFF4C2).withValues(alpha: alpha));
   }
-}
-
-void _miniBall(ui.Canvas canvas, double d, double alpha) {
-  final r = d / 2;
-  canvas.drawCircle(ui.Offset(4, 6), r, Paint()..color = const Color(0x55000000).withValues(alpha: 0.35 * alpha));
-  canvas.drawCircle(
-    ui.Offset.zero,
-    r,
-    Paint()
-      ..shader = ui.Gradient.radial(ui.Offset(-r * 0.35, -r * 0.35), r * 1.5, [
-        const Color(0xFFFFFFFF).withValues(alpha: alpha),
-        const Color(0xFFB7C0D6).withValues(alpha: alpha),
-      ]),
-  );
-  final dark = Paint()..color = const Color(0xFF1B1F2E).withValues(alpha: alpha);
-  for (final a in [0.0, 2.1, 4.2]) {
-    final c = ui.Offset(cos(a) * r * 0.55, sin(a) * r * 0.55);
-    canvas.drawCircle(c, r * 0.22, dark);
-  }
-  canvas.drawCircle(ui.Offset(-r * 0.05, -r * 0.1), r * 0.16, dark);
-  canvas.drawCircle(ui.Offset.zero, r, Paint()..color = const Color(0xFF1B1F2E).withValues(alpha: 0.5 * alpha)..style = PaintingStyle.stroke..strokeWidth = 2);
 }
 
 class _Txt {
