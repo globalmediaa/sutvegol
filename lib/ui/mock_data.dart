@@ -80,7 +80,7 @@ const List<FkBadge> kBadges = [
   FkBadge('early_bird', 'Erkenci', _crimson, icon: Icons.wb_twilight),
   FkBadge('comeback', 'Geri dönüş', _green, icon: Icons.replay),
   FkBadge('no_miss', 'Hatasız tur', _teal, icon: Icons.verified),
-  FkBadge('legend', 'Frikik Kral', _yellow, icon: Icons.emoji_events),
+  FkBadge('legend', 'Şut ve Gol', _yellow, icon: Icons.emoji_events),
 ];
 
 const String kMeName = 'Sen';

@@ -5,7 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'geometry.dart';
-import 'frikik_kral_game.dart';
+import 'sut_ve_gol_game.dart';
 import 'scene_art.dart';
 import 'sfx.dart';
 
@@ -13,7 +13,7 @@ double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 double _lerp(double a, double b, double t) => a + (b - a) * t;
 
 /// Arka plan: geniş / yakın sahne, çapraz geçiş.
-class Background extends PositionComponent with HasGameReference<FrikikKralGame> {
+class Background extends PositionComponent with HasGameReference<SutVeGolGame> {
   Background() : super(size: Vector2(kWorldW, kWorldH), priority: 0);
 
   late Sprite _current;
@@ -61,7 +61,7 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 
 /// Oyuncunun topu: soldan yuvarlanarak gelir, bekler, fırlatılır, kaleye
 /// küçülerek (hafif muz eğrisiyle) uçar; direğe çarparsa düşer.
-class Ball extends PositionComponent with HasGameReference<FrikikKralGame> {
+class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
   static const double flightDur = 0.5;
@@ -343,7 +343,7 @@ class Ball extends PositionComponent with HasGameReference<FrikikKralGame> {
 }
 
 /// Kaledeki hedef.
-class TargetComp extends PositionComponent with HasGameReference<FrikikKralGame> {
+class TargetComp extends PositionComponent with HasGameReference<SutVeGolGame> {
   TargetComp() : super(anchor: Anchor.center, priority: 8);
 
   bool visible = false;
@@ -429,7 +429,7 @@ class TargetComp extends PositionComponent with HasGameReference<FrikikKralGame>
 }
 
 /// Ray üstünde kayan siyah manken (kaleci). Birden fazla olabilir.
-class Keeper extends PositionComponent with HasGameReference<FrikikKralGame> {
+class Keeper extends PositionComponent with HasGameReference<SutVeGolGame> {
   Keeper({this.phaseOffset = 0, this.periodScale = 1}) : super(priority: 10);
 
   static const double railLen = 536;
@@ -503,7 +503,7 @@ class Keeper extends PositionComponent with HasGameReference<FrikikKralGame> {
 }
 
 /// Kale çizgisinde kalan küçük top.
-class RestingBall extends PositionComponent with HasGameReference<FrikikKralGame> {
+class RestingBall extends PositionComponent with HasGameReference<SutVeGolGame> {
   RestingBall(Vector2 pos, double s)
       : super(position: pos, anchor: Anchor.center, priority: 5) {
     scale = Vector2.all(s);

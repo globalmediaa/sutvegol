@@ -5,7 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import '../ui/logo.dart';
-import 'frikik_kral_game.dart';
+import 'sut_ve_gol_game.dart';
 import 'geometry.dart';
 import 'sfx.dart';
 
@@ -13,7 +13,7 @@ double _easeInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) 
 
 /// Açılış: gece göğü + "Yükleniyor", sonra logo alev izleriyle belirir,
 /// köz parçacıkları yükselir, kamera sokağa iner.
-class SplashLayer extends PositionComponent with HasGameReference<FrikikKralGame> {
+class SplashLayer extends PositionComponent with HasGameReference<SutVeGolGame> {
   SplashLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 50);
 
   static const double loading = 0.9;

@@ -2,7 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'game/frikik_kral_game.dart';
+import 'game/sut_ve_gol_game.dart';
 import 'ui/game_over_overlay.dart';
 import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
@@ -18,15 +18,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  runApp(const FrikikKralApp());
+  runApp(const SutVeGolApp());
 }
 
-class FrikikKralApp extends StatelessWidget {
-  const FrikikKralApp({super.key});
+class SutVeGolApp extends StatelessWidget {
+  const SutVeGolApp({super.key});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Frikik Kral',
+        title: 'Şut ve Gol',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           fontFamily: FK.font,
@@ -48,7 +48,7 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  late FrikikKralGame _game = _create();
+  late SutVeGolGame _game = _create();
 
   @override
   void initState() {
@@ -74,8 +74,8 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  FrikikKralGame _create() {
-    final g = FrikikKralGame();
+  SutVeGolGame _create() {
+    final g = SutVeGolGame();
     g.onExit = _exit;
     return g;
   }
@@ -92,7 +92,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: FK.navy,
-        body: GameWidget<FrikikKralGame>(
+        body: GameWidget<SutVeGolGame>(
           key: ValueKey(_game),
           game: _game,
           overlayBuilderMap: {

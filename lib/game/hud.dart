@@ -4,13 +4,13 @@ import 'dart:ui' hide TextStyle;
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
-import 'frikik_kral_game.dart';
+import 'sut_ve_gol_game.dart';
 import 'geometry.dart';
 import 'led.dart';
 import 'scene_art.dart';
 
 /// 7-segment LED rakamlar + kalpler (arka plandaki tabela üzerine çizilir).
-class Scoreboard extends PositionComponent with HasGameReference<FrikikKralGame> {
+class Scoreboard extends PositionComponent with HasGameReference<SutVeGolGame> {
   Scoreboard() : super(priority: 30);
 
   static const Color white = Color(0xFFF5F7FF);
@@ -64,7 +64,7 @@ class Scoreboard extends PositionComponent with HasGameReference<FrikikKralGame>
 
 /// Tüm ekranı kaplayan dokunma katmanı: kaydırma = şut, sağ üst = pause.
 class InputLayer extends PositionComponent
-    with HasGameReference<FrikikKralGame>, DragCallbacks, TapCallbacks {
+    with HasGameReference<SutVeGolGame>, DragCallbacks, TapCallbacks {
   InputLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 40);
 
   Vector2? _start;

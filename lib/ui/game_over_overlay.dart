@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../game/frikik_kral_game.dart';
+import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
@@ -14,7 +14,7 @@ import 'widgets.dart';
 /// skor, rekor, sahne), sıra paneli ve "TEKRAR OYNA" hap butonu.
 class GameOverOverlay extends StatefulWidget {
   const GameOverOverlay({super.key, required this.game});
-  final FrikikKralGame game;
+  final SutVeGolGame game;
 
   @override
   State<GameOverOverlay> createState() => _GameOverOverlayState();
@@ -85,7 +85,7 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
     });
   }
 
-  Widget _card(double s, FrikikKralGame game, int rank, bool isRecord) {
+  Widget _card(double s, SutVeGolGame game, int rank, bool isRecord) {
     return GlassCard(
       radius: 26 * s,
       child: Column(
@@ -154,7 +154,7 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
     );
   }
 
-  Widget _rankPanel(double s, FrikikKralGame game, int rank) => GestureDetector(
+  Widget _rankPanel(double s, SutVeGolGame game, int rank) => GestureDetector(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LeaderboardScreen(myScore: game.score))),
         child: Container(
           width: 128 * s,

@@ -1,4 +1,4 @@
-# Frikik Kral (Free Kick King) — Flutter/Flame
+# Şut ve Gol — Flutter/Flame
 
 Hedefe şut oyunu: kaydır → top kaleye uçar → halkaya isabet puan getirir. Skor arttıkça sahne
 **Sokak → Sahil → Halı Saha → Stadyum** olarak değişir. Tüm görseller koddan çizilir (telifsiz),
@@ -8,7 +8,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - `lib/main.dart` — MaterialApp (lacivert tema), GameWidget + `gameOver`/`pause` overlay'leri, çıkış akışı (Yükleniyor → oyun baştan).
 - `lib/game/geometry.dart` — sanal çözünürlük 1320x2868, `Stage` enum'u (etiket, skor eşiği, vurgu rengi), geniş/yakın görünüm ölçüleri (`kWide`, `kZoom`, tabela/kalp konumları), `kPauseRect`.
 - `lib/game/scene_art.dart` — **prosedürel sanat**: sahne × kamera arka planları (`SceneArt.background`), açılış göğü, top görseli (kesik ikosahedron izdüşümü), kalp/hedef/kaleci çizimleri. Arka planlar `ui.Image` olarak üretilip Flame `images` cache'ine `bg_<stage>_<view>` anahtarıyla eklenir.
-- `lib/game/frikik_kral_game.dart` — durum makinesi, skor/can, seri + Kral Modu, 2 kaleci, direk sekmesi, kamera geçişi, **sahne geçişi** (`_enterStage`: yeni bg üretimi → crossfade → afiş → ambiyans), zamanlayıcı.
+- `lib/game/sut_ve_gol_game.dart` — durum makinesi, skor/can, seri + Kral Modu, 2 kaleci, direk sekmesi, kamera geçişi, **sahne geçişi** (`_enterStage`: yeni bg üretimi → crossfade → afiş → ambiyans), zamanlayıcı.
 - `lib/game/scene.dart` — Background (crossfade), Ball (yuvarlanma / bezier uçuş / düşme), TargetComp (sahne rengine göre halka), Keeper (siyah silüet manken, koddan çizilir), RestingBall, NetRipple, ScorePopup.
 - `lib/game/fever.dart` — Kral Modu parıltı katmanı + taçlı "KRAL MODU" levhası, bitiş halkası, `StageBanner` ("YENİ SAHNE").
 - `lib/game/hud.dart` — LED tabela rakamları, kalpler, InputLayer (swipe → iniş noktası + falso).
@@ -38,7 +38,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - Tümü sentez: `python3 tools/make_audio.py` → `assets/audio/` (22.05 kHz mono). Vuruş, isabet çanı, iskalama, yuvarlanma, Kral Modu başla/isabet/bitiş + alev döngüsü, oyun bitti, sayaç, açılış, sahne fanfarı, 4 ambiyans (sokak trafiği / sahil dalgası + martı / gece halı saha / tribün).
 
 ## Kimlik
-- Uygulama adı: **Frikik Kral**. Paket `frikik_kral`, iOS bundle `com.globalmedia.frikikKral`, Android `com.globalmedia.frikik_kral`. İkonlar: lacivert zemin, taç + top (PIL ile üretildi).
+- Uygulama adı: **Şut ve Gol**. Paket `sut_ve_gol`, iOS bundle `com.globalmedia.sutVeGol`, Android `com.globalmedia.sut_ve_gol`. İkonlar: lacivert zemin, taç + top (PIL ile üretildi).
 - Klasör adı hâlâ `kick-legend` (yerel yol; istenirse ayrıca taşınır).
 
 ## Test / dağıtım

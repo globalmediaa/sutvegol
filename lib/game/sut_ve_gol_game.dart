@@ -34,8 +34,8 @@ class _Scheduled {
   final void Function() fn;
 }
 
-class FrikikKralGame extends FlameGame {
-  FrikikKralGame()
+class SutVeGolGame extends FlameGame {
+  SutVeGolGame()
       : super(
           camera: CameraComponent.withFixedResolution(
             width: kWorldW,

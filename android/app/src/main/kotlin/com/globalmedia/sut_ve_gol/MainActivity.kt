@@ -1,4 +1,4 @@
-package com.globalmedia.frikik_kral
+package com.globalmedia.sut_ve_gol
 
 import io.flutter.embedding.android.FlutterActivity
 

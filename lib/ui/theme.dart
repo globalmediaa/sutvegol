@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Frikik Kral görsel kimliği: gece laciverti zemin, ateş turuncusu vurgu.
+/// Şut ve Gol görsel kimliği: gece laciverti zemin, ateş turuncusu vurgu.
 class FK {
   FK._();
 

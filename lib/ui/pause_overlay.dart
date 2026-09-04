@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../game/frikik_kral_game.dart';
+import '../game/sut_ve_gol_game.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
 import 'mock_data.dart';
@@ -11,7 +11,7 @@ import 'widgets.dart';
 /// anahtarları, skor + sıra özeti, altta Devam / Yeniden / Çıkış.
 class PauseOverlay extends StatefulWidget {
   const PauseOverlay({super.key, required this.game});
-  final FrikikKralGame game;
+  final SutVeGolGame game;
 
   @override
   State<PauseOverlay> createState() => _PauseOverlayState();
@@ -52,7 +52,7 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
     });
   }
 
-  Widget _card(double s, FrikikKralGame game, int rank) {
+  Widget _card(double s, SutVeGolGame game, int rank) {
     return GlassCard(
       radius: 26 * s,
       padding: EdgeInsets.fromLTRB(22 * s, 22 * s, 22 * s, 22 * s),

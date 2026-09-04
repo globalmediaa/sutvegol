@@ -5,13 +5,13 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import '../ui/logo.dart';
-import 'frikik_kral_game.dart';
+import 'sut_ve_gol_game.dart';
 import 'geometry.dart';
 
 double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 
 /// KRAL MODU: altın-turuncu parıltı, bokeh, kıvılcımlar ve taçlı "KRAL MODU" levhası.
-class FeverOverlay extends PositionComponent with HasGameReference<FrikikKralGame> {
+class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame> {
   FeverOverlay() : super(size: Vector2(kWorldW, kWorldH), priority: 26);
 
   double _alpha = 0; // 0..1 görünürlük

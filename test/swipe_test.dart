@@ -1,9 +1,9 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frikik_kral/game/geometry.dart';
-import 'package:frikik_kral/game/frikik_kral_game.dart';
-import 'package:frikik_kral/game/sfx.dart';
+import 'package:sut_ve_gol/game/geometry.dart';
+import 'package:sut_ve_gol/game/sut_ve_gol_game.dart';
+import 'package:sut_ve_gol/game/sfx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -14,7 +14,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final game = FrikikKralGame();
+    final game = SutVeGolGame();
     await tester.runAsync(() async {
       await tester.pumpWidget(MaterialApp(home: GameWidget(game: game)));
       await game.loaded;
