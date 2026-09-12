@@ -5,13 +5,19 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
 ui.Image? _brandIcon;
+ui.Image? _brandMark;
 
 Future<void> loadBrandIdentity() async {
-  final data = await rootBundle.load(
-    'assets/branding/sut-ve-gol-icon-master.png',
+  _brandIcon = await _loadImage('assets/branding/sut-ve-gol-icon-master.png');
+  _brandMark = await _loadImage(
+    'assets/branding/sut-ve-gol-mark-transparent.png',
   );
+}
+
+Future<ui.Image> _loadImage(String asset) async {
+  final data = await rootBundle.load(asset);
   final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-  _brandIcon = (await codec.getNextFrame()).image;
+  return (await codec.getNextFrame()).image;
 }
 
 /// Uygulama ikonunu kırpmadan, verilen kare alana birebir çizer.
@@ -32,6 +38,30 @@ void paintBrandIcon(
   canvas.drawImageRect(
     icon,
     ui.Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
+    box,
+    Paint()..filterQuality = FilterQuality.high,
+  );
+  canvas.restore();
+}
+
+/// Splash gibi zeminli yüzeylerde kare arka plan olmadan marka sembolünü çizer.
+void paintBrandMark(
+  ui.Canvas canvas,
+  ui.Rect box, {
+  double alpha = 1,
+  double reveal = 1,
+}) {
+  final mark = _brandMark;
+  if (mark == null) return;
+  final k = reveal.clamp(0.0, 1.0);
+  canvas.saveLayer(
+    box,
+    Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k),
+  );
+  canvas.translate(0, (1 - k) * 20);
+  canvas.drawImageRect(
+    mark,
+    ui.Rect.fromLTWH(0, 0, mark.width.toDouble(), mark.height.toDouble()),
     box,
     Paint()..filterQuality = FilterQuality.high,
   );
