@@ -6,7 +6,6 @@ import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
-import 'mock_data.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -47,10 +46,10 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
-    final rank = rankFor(lbEntries(LbTab.season), game.score);
+    final rank = game.best;
     final isRecord = game.score > 0 && game.score >= game.best;
     return LayoutBuilder(builder: (context, c) {
-      final s = c.maxWidth / 440;
+      final s = min(c.maxWidth / 440, c.maxHeight / 760).clamp(0.0, 1.0);
       final top = MediaQuery.paddingOf(context).top;
       return FadeTransition(
         opacity: _fade,
@@ -163,12 +162,12 @@ class _GameOverOverlayState extends State<GameOverOverlay> with TickerProviderSt
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AvatarCircle(kMeHandle, size: 64 * s, ring: FK.orange, ringWidth: 3 * s),
+              AvatarCircle('Oyuncu', size: 64 * s, ring: FK.orange, ringWidth: 3 * s),
               Transform.translate(
                 offset: Offset(0, -10 * s),
-                child: Chip2('#${_rankReady ? rank : '—'}', fontSize: 11 * s),
+                child: Chip2('${_rankReady ? rank : '—'}', fontSize: 11 * s),
               ),
-              Text('SIRALAMA', style: FK.t(size: 10 * s, w: FontWeight.w600, color: FK.muted, spacing: 1.5 * s)),
+              Text('REKOR', style: FK.t(size: 10 * s, w: FontWeight.w600, color: FK.muted, spacing: 1.5 * s)),
               SizedBox(height: 4 * s),
               Row(
                 mainAxisSize: MainAxisSize.min,

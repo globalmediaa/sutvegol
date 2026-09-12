@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../game/sut_ve_gol_game.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
-import 'mock_data.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -29,9 +29,9 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
-    final rank = rankFor(lbEntries(LbTab.season), game.score);
+    final rank = game.best;
     return LayoutBuilder(builder: (context, c) {
-      final s = c.maxWidth / 440;
+      final s = (c.maxWidth / 440).clamp(0.0, 1.0);
       return FadeTransition(
         opacity: _fade,
         child: Stack(
@@ -40,16 +40,25 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
             Positioned(
               left: 24 * s,
               right: 24 * s,
-              top: 210 * s,
-              child: ScaleTransition(
-                scale: CurvedAnimation(parent: _fade, curve: Curves.easeOutBack),
-                child: _card(s, game, rank),
-              ),
+              top: MediaQuery.paddingOf(context).top + 24,
+              bottom: MediaQuery.paddingOf(context).bottom + 24,
+              child: Center(child: SingleChildScrollView(child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: ScaleTransition(scale: CurvedAnimation(parent: _fade, curve: Curves.easeOutBack), child: _card(s, game, rank)),
+              ))),
             ),
           ],
         ),
       );
     });
+  }
+
+  Future<void> _open(String address) async {
+    try {
+      if (await launchUrl(Uri.parse(address), mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bağlantı açılamadı. $address')));
   }
 
   Widget _card(double s, SutVeGolGame game, int rank) {
@@ -75,7 +84,7 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
               decoration: BoxDecoration(color: FK.glass, borderRadius: BorderRadius.circular(18 * s), border: Border.all(color: FK.glassBorder)),
               child: Row(
                 children: [
-                  AvatarCircle(kMeHandle, size: 48 * s, ring: FK.orange, ringWidth: 2.5 * s),
+                  AvatarCircle('Oyuncu', size: 48 * s, ring: FK.orange, ringWidth: 2.5 * s),
                   SizedBox(width: 12 * s),
                   Expanded(
                     child: Column(
@@ -90,11 +99,11 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Chip2('#$rank', fontSize: 12 * s),
+                      Chip2('$rank', fontSize: 12 * s),
                       SizedBox(height: 4 * s),
                       Row(
                         children: [
-                          Text('Sıralama', style: FK.t(size: 12 * s, w: FontWeight.w600, color: FK.amber)),
+                          Text('Rekor', style: FK.t(size: 12 * s, w: FontWeight.w600, color: FK.amber)),
                           Icon(Icons.chevron_right_rounded, size: 16 * s, color: FK.amber),
                         ],
                       ),
@@ -107,6 +116,10 @@ class _PauseOverlayState extends State<PauseOverlay> with SingleTickerProviderSt
           SizedBox(height: 12 * s),
           ToggleRow(icon: Icons.volume_up_rounded, label: 'Ses', value: game.soundOn, scale: s, onChanged: (v) => setState(() => game.setSound(v))),
           ToggleRow(icon: Icons.vibration_rounded, label: 'Titreşim', value: game.hapticsOn, scale: s, onChanged: (v) => setState(() => game.setHaptics(v))),
+          Wrap(alignment: WrapAlignment.center, children: [
+            TextButton(onPressed: () => _open('https://globalmediaa.github.io/sutvegol/privacy.html'), child: const Text('Gizlilik')),
+            TextButton(onPressed: () => _open('https://globalmediaa.github.io/sutvegol/#destek'), child: const Text('Destek')),
+          ]),
           SizedBox(height: 18 * s),
           PillButton(label: 'DEVAM ET', icon: Icons.play_arrow_rounded, onTap: game.resume, height: 56 * s, fontSize: 18 * s, width: double.infinity),
           SizedBox(height: 10 * s),

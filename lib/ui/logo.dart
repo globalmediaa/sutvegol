@@ -3,98 +3,36 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
-import '../game/scene_art.dart';
 
-/// "ŞUT VE GOL" logosu — taç, iki satırlık eğik 3D yazı ve alev izli top.
-/// Hem Flame (splash) hem Flutter (leaderboard, loading) aynı çizimi kullanır.
-/// [box] logonun sığacağı alan; oran ~2.05:1 olarak çizilir ve ortalanır.
+/// Uygulama ikonu ile aynı falsolu şut amblemi ve iki satırlı marka.
 void paintLogo(ui.Canvas canvas, ui.Rect box, {double alpha = 1, double reveal = 1, bool subtitle = true}) {
   final w = box.width;
   final h = min(box.height, w / 2.05);
   final r = ui.Rect.fromCenter(center: box.center, width: w, height: h);
-  final u = w / 1000; // ölçek birimi
+  final k = reveal.clamp(0.0, 1.0);
+  canvas.saveLayer(box, Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k));
+  canvas.translate(r.left, r.top + (1 - k) * 20);
   canvas.save();
-  canvas.translate(r.left, r.top);
-
-  // Satır 1: ŞUT VE (turuncu-amber), satır 2: GOL (beyaz) + taç.
-  final line1 = _text('ŞUT VE', 250 * u, FontWeight.w700);
-  final line2 = _text('GOL', 250 * u, FontWeight.w700);
-  final cx = w / 2;
-  final y1 = h * 0.30;
-  final y2 = h * 0.72;
-
-  // Alev izi (arka planda, sağdan sola).
-  final trail = Path()
-    ..moveTo(w * 0.98, y1 + 20 * u)
-    ..cubicTo(w * 0.80, y1 - 120 * u, w * 0.30, y2 + 40 * u, w * 0.02, y2 - 40 * u);
-  canvas.drawPath(
-    trail,
-    Paint()
-      ..color = const Color(0xFFFF7A1A).withValues(alpha: 0.35 * alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 34 * u
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 18 * u),
-  );
-
-  void drawLine(_Txt t, double y, List<Color> fill, double skewK) {
-    final k = skewK.clamp(0.0, 1.0);
-    if (k <= 0) return;
-    canvas.save();
-    canvas.translate(cx, y);
-    canvas.scale(0.6 + 0.4 * k, 0.6 + 0.4 * k);
-    canvas.skew(-0.18, 0);
-    // 3D derinlik.
-    for (var i = 7; i >= 1; i--) {
-      t.paint(canvas, ui.Offset(i * 1.6 * u, i * 1.8 * u), const Color(0xFF0B1226).withValues(alpha: alpha * k));
-    }
-    // Kontur.
-    for (final o in [ui.Offset(-3 * u, 0), ui.Offset(3 * u, 0), ui.Offset(0, -3 * u), ui.Offset(0, 3 * u)]) {
-      t.paint(canvas, o, const Color(0xFF141F45).withValues(alpha: alpha * k));
-    }
-    t.paintGradient(canvas, ui.Offset.zero, fill.map((c) => c.withValues(alpha: alpha * k)).toList());
-    canvas.restore();
-  }
-
-  drawLine(line1, y1, const [Color(0xFFFFE08A), Color(0xFFFF9A2E), Color(0xFFFF6A00)], reveal * 1.6);
-  drawLine(line2, y2, const [Color(0xFFFFFFFF), Color(0xFFDDE4F5), Color(0xFFB9C3DE)], reveal * 1.6 - 0.35);
-
-  // Taç: GOL'ün sağ üstünde, hafif yatık.
-  final ck = ((reveal - 0.45) * 2.2).clamp(0.0, 1.0);
-  if (ck > 0) {
-    canvas.save();
-    canvas.translate(cx + line2.width * 0.56, y2 - line2.height * 0.50 - (1 - ck) * 60 * u);
-    canvas.rotate(0.2);
-    canvas.scale(ck);
-    paintCrown(canvas, 135 * u, alpha: alpha);
-    canvas.restore();
-  }
-
-  // Top: satır 1'in sağında, alev izinin başında.
-  final bk = ((reveal - 0.25) * 2).clamp(0.0, 1.0);
-  if (bk > 0) {
-    canvas.save();
-    canvas.translate(w * 0.94, y1 + 24 * u);
-    canvas.scale(bk);
-    canvas.rotate(-0.35);
-    // Yumuşak gölge + gerçek top geometrisi.
-    canvas.drawCircle(
-      ui.Offset(4 * u, 8 * u),
-      46 * u,
-      Paint()
-        ..color = const Color(0xFF000000).withValues(alpha: 0.35 * alpha)
-        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 8 * u),
-    );
-    if (alpha < 1) canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, alpha));
-    SceneArt.paintBall(canvas, 46 * u);
-    if (alpha < 1) canvas.restore();
-    canvas.restore();
-  }
-
-  if (subtitle) {
-    final sub = _text('SHOOT & SCORE', 46 * u, FontWeight.w600, spacing: 10 * u);
-    sub.paint(canvas, ui.Offset(cx, h * 0.96), const Color(0xFFDDE4F5).withValues(alpha: 0.85 * alpha * reveal.clamp(0, 1)));
-  }
+  canvas.translate(-w * 0.02, h * 0.05);
+  canvas.scale(w * 0.46 / 1024);
+  final trail = Path()..moveTo(174,700)..cubicTo(202,428,366,224,682,236)
+    ..cubicTo(480,292,382,402,372,554)..cubicTo(496,474,666,488,830,580)
+    ..cubicTo(634,522,460,574,330,770)..close();
+  canvas.drawPath(trail, Paint()..color = const Color(0xFFFF852D));
+  canvas.drawPath(Path()..moveTo(192,805)..cubicTo(382,674,578,666,748,720), Paint()
+    ..color = const Color(0xFFFFB94F)..style = PaintingStyle.stroke..strokeWidth = 26..strokeCap = StrokeCap.round);
+  canvas.drawCircle(const Offset(703,348),147,Paint()..color=const Color(0xFFF5F7FF));
+  canvas.drawPath(Path()..moveTo(703,270)..lineTo(774,322)..lineTo(747,405)..lineTo(659,405)..lineTo(632,322)..close(), Paint()..color=const Color(0xFF101D3D));
+  final seams=Path()..moveTo(703,201)..lineTo(703,270)..moveTo(843,303)..lineTo(774,322)
+    ..moveTo(790,467)..lineTo(747,405)..moveTo(616,467)..lineTo(659,405)..moveTo(563,303)..lineTo(632,322);
+  canvas.drawPath(seams,Paint()..color=const Color(0xFF101D3D)..style=PaintingStyle.stroke..strokeWidth=13);
+  canvas.restore();
+  final line1 = _text('ŞUT VE', w * .145, FontWeight.w700, spacing: 0);
+  final line2 = _text('GOL', w * .195, FontWeight.w700, spacing: w * .009);
+  line1.paint(canvas, Offset(w * .68,h * .32),const Color(0xFFF5F7FF));
+  line2.paint(canvas, Offset(w * .68,h * .67),const Color(0xFFFF852D));
+  if(subtitle) { _text('HER ŞUT BİR ŞANS.',w * .032,FontWeight.w600,spacing:w*.004)
+    .paint(canvas,Offset(w*.5,h*.97),const Color(0xFFB9C3DE)); }
   canvas.restore();
 }
 
