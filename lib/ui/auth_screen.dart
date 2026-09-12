@@ -8,7 +8,8 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, required this.onGuest});
+  final VoidCallback onGuest;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -160,6 +161,15 @@ class _AuthScreenState extends State<AuthScreen> {
                       register
                           ? 'Zaten hesabın var mı? Giriş yap'
                           : 'Yeni misin? Hesap oluştur',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: auth.loading ? null : widget.onGuest,
+                    icon: const Icon(Icons.sports_soccer_outlined),
+                    label: const Text('ŞİMDİLİK MİSAFİR OYNA'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      side: const BorderSide(color: FK.glassBorder),
                     ),
                   ),
                   const SizedBox(height: 8),

@@ -26,13 +26,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: const Text('Sıralama'),
-      actions: [
-        IconButton(
-          tooltip: 'Çıkış yap',
-          onPressed: () => AuthService.instance.logout(),
-          icon: const Icon(Icons.logout_rounded),
-        ),
-      ],
+      actions: AuthService.instance.user == null
+          ? null
+          : [
+              IconButton(
+                tooltip: 'Çıkış yap',
+                onPressed: () => AuthService.instance.logout(),
+                icon: const Icon(Icons.logout_rounded),
+              ),
+            ],
     ),
     body: RefreshIndicator(
       onRefresh: () async =>

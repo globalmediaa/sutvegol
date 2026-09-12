@@ -48,8 +48,15 @@ class SutVeGolApp extends StatelessWidget {
   );
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool guest = false;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -59,16 +66,19 @@ class AuthGate extends StatelessWidget {
       if (auth.loading && auth.user == null) {
         return const LoadingScreen();
       }
-      if (auth.user == null) return const AuthScreen();
-      if (auth.user!.needsUsername) return const UsernameScreen();
-      return const GameScreen();
+      if (auth.user == null && !guest) {
+        return AuthScreen(onGuest: () => setState(() => guest = true));
+      }
+      if (!guest && auth.user!.needsUsername) return const UsernameScreen();
+      return GameScreen(guest: guest);
     },
   );
 }
 
 /// Oyun ekranı; çıkışta Yükleniyor gösterip oyunu baştan kurar.
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  const GameScreen({super.key, this.guest = false});
+  final bool guest;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -160,7 +170,8 @@ class _GameScreenState extends State<GameScreen> {
       game: _game,
       overlayBuilderMap: {
         kGameOverOverlay: (context, game) => GameOverOverlay(game: game),
-        kPauseOverlay: (context, game) => PauseOverlay(game: game),
+        kPauseOverlay: (context, game) =>
+            PauseOverlay(game: game, guest: widget.guest),
       },
     ),
   );

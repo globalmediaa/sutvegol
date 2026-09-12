@@ -11,8 +11,9 @@ import 'widgets.dart';
 /// Pause perdesi: bulanık karartma, "DURAKLATILDI" kartı; ses/titreşim
 /// anahtarları, skor + sıra özeti, altta Devam / Yeniden / Çıkış.
 class PauseOverlay extends StatefulWidget {
-  const PauseOverlay({super.key, required this.game});
+  const PauseOverlay({super.key, required this.game, this.guest = false});
   final SutVeGolGame game;
+  final bool guest;
 
   @override
   State<PauseOverlay> createState() => _PauseOverlayState();
@@ -199,12 +200,13 @@ class _PauseOverlayState extends State<PauseOverlay>
           Wrap(
             alignment: WrapAlignment.center,
             children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AccountScreen()),
+              if (!widget.guest)
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AccountScreen()),
+                  ),
+                  child: const Text('Hesabım'),
                 ),
-                child: const Text('Hesabım'),
-              ),
               TextButton(
                 onPressed: () => _open(
                   'https://globalmediaa.github.io/sutvegol/privacy.html',
