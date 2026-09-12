@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
-/// Uygulama ikonu ile aynı falsolu şut amblemi ve iki satırlı marka.
+/// Uygulama ikonu ile aynı S biçimli şut yolu, top ve kale amblemi.
 void paintLogo(
   ui.Canvas canvas,
   ui.Rect box, {
@@ -23,56 +23,60 @@ void paintLogo(
   canvas.save();
   canvas.translate(-w * 0.02, h * 0.05);
   canvas.scale(w * 0.46 / 1024);
-  final trail = Path()
-    ..moveTo(174, 700)
-    ..cubicTo(202, 428, 366, 224, 682, 236)
-    ..cubicTo(480, 292, 382, 402, 372, 554)
-    ..cubicTo(496, 474, 666, 488, 830, 580)
-    ..cubicTo(634, 522, 460, 574, 330, 770)
+  final shot = Path()
+    ..moveTo(150, 780)
+    ..cubicTo(400, 728, 570, 670, 615, 560)
+    ..cubicTo(650, 475, 555, 420, 410, 430)
+    ..cubicTo(245, 440, 205, 345, 300, 285)
+    ..cubicTo(420, 208, 575, 230, 690, 285)
+    ..cubicTo(545, 255, 400, 270, 355, 330)
+    ..cubicTo(325, 370, 390, 392, 500, 385)
+    ..cubicTo(700, 372, 790, 500, 720, 635)
+    ..cubicTo(635, 800, 385, 840, 150, 780)
     ..close();
-  canvas.drawPath(trail, Paint()..color = const Color(0xFFFF852D));
   canvas.drawPath(
-    Path()
-      ..moveTo(192, 805)
-      ..cubicTo(382, 674, 578, 666, 748, 720),
+    shot,
     Paint()
-      ..color = const Color(0xFFFFB94F)
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFFF6418), Color(0xFFFFB52E)],
+      ).createShader(const Rect.fromLTWH(140, 200, 650, 650)),
+  );
+  final goal = Path()
+    ..moveTo(650, 220)
+    ..lineTo(900, 175)
+    ..lineTo(920, 455)
+    ..lineTo(760, 390)
+    ..moveTo(730, 205)
+    ..lineTo(770, 395)
+    ..moveTo(810, 190)
+    ..lineTo(845, 425)
+    ..moveTo(675, 285)
+    ..lineTo(907, 300)
+    ..moveTo(710, 345)
+    ..lineTo(914, 385);
+  canvas.drawPath(
+    goal,
+    Paint()
+      ..color = const Color(0xFFFFB52E)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 26
-      ..strokeCap = StrokeCap.round,
+      ..strokeWidth = 22
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round,
   );
   canvas.drawCircle(
-    const Offset(703, 348),
-    147,
+    const Offset(690, 325),
+    70,
     Paint()..color = const Color(0xFFF5F7FF),
   );
   canvas.drawPath(
     Path()
-      ..moveTo(703, 270)
-      ..lineTo(774, 322)
-      ..lineTo(747, 405)
-      ..lineTo(659, 405)
-      ..lineTo(632, 322)
+      ..moveTo(690, 290)
+      ..lineTo(725, 316)
+      ..lineTo(712, 357)
+      ..lineTo(668, 357)
+      ..lineTo(655, 316)
       ..close(),
     Paint()..color = const Color(0xFF101D3D),
-  );
-  final seams = Path()
-    ..moveTo(703, 201)
-    ..lineTo(703, 270)
-    ..moveTo(843, 303)
-    ..lineTo(774, 322)
-    ..moveTo(790, 467)
-    ..lineTo(747, 405)
-    ..moveTo(616, 467)
-    ..lineTo(659, 405)
-    ..moveTo(563, 303)
-    ..lineTo(632, 322);
-  canvas.drawPath(
-    seams,
-    Paint()
-      ..color = const Color(0xFF101D3D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 13,
   );
   canvas.restore();
   final line1 = _text('ŞUT VE', w * .145, FontWeight.w700, spacing: 0);
