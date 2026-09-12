@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,10 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final email = TextEditingController();
   final password = TextEditingController();
+  final username = TextEditingController();
+  Timer? usernameTimer;
+  bool? usernameAvailable;
+  bool checkingUsername = false;
   bool register = true;
   bool hidden = true;
 
@@ -26,7 +31,33 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     email.dispose();
     password.dispose();
+    username.dispose();
+    usernameTimer?.cancel();
     super.dispose();
+  }
+
+  void checkUsername(String raw) {
+    usernameTimer?.cancel();
+    final value = raw.trim();
+    final valid = RegExp(r'^[a-zA-Z0-9_]{3,20}$').hasMatch(value);
+    setState(() {
+      usernameAvailable = null;
+      checkingUsername = valid;
+    });
+    if (!valid) return;
+    usernameTimer = Timer(const Duration(milliseconds: 450), () async {
+      try {
+        final available = await AuthService.instance.usernameAvailable(value);
+        if (mounted && username.text.trim() == value) {
+          setState(() {
+            usernameAvailable = available;
+            checkingUsername = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => checkingUsername = false);
+      }
+    });
   }
 
   Future<void> run(Future<void> Function() action) async {
@@ -91,6 +122,47 @@ class _AuthScreenState extends State<AuthScreen> {
                         ],
                       ),
                     ),
+                  if (register) ...[
+                    TextField(
+                      controller: username,
+                      onChanged: checkUsername,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.none,
+                      maxLength: 20,
+                      decoration: InputDecoration(
+                        labelText: 'Kullanıcı adı',
+                        prefixText: '@',
+                        helperText: usernameAvailable == true
+                            ? 'Bu kullanıcı adı kullanılabilir'
+                            : '3–20 karakter · harf, rakam ve _',
+                        helperStyle: usernameAvailable == true
+                            ? FK.t(color: FK.green)
+                            : null,
+                        prefixIcon: const Icon(Icons.alternate_email_rounded),
+                        suffixIcon: checkingUsername
+                            ? const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : usernameAvailable == null
+                            ? null
+                            : Icon(
+                                usernameAvailable!
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: usernameAvailable! ? FK.green : FK.red,
+                              ),
+                      ),
+                    ),
+                    if (usernameAvailable == false)
+                      Text(
+                        'Bu kullanıcı adı alınmış. Başka bir tane dene.',
+                        style: FK.t(color: FK.red),
+                      ),
+                    const SizedBox(height: 14),
+                  ],
                   TextField(
                     controller: email,
                     keyboardType: TextInputType.emailAddress,
@@ -133,13 +205,15 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
-                    onPressed: auth.loading
+                    onPressed:
+                        auth.loading || (register && usernameAvailable != true)
                         ? null
                         : () => run(
                             () => auth.emailAuth(
                               email.text,
                               password.text,
                               register: register,
+                              username: username.text,
                             ),
                           ),
                     icon: auth.loading
@@ -159,6 +233,9 @@ class _AuthScreenState extends State<AuthScreen> {
                         ? null
                         : () => setState(() {
                             register = !register;
+                            usernameAvailable = null;
+                            checkingUsername = false;
+                            usernameTimer?.cancel();
                             auth.error = null;
                           }),
                     child: Text(

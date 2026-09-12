@@ -52,11 +52,16 @@ class AuthService extends ChangeNotifier {
     String email,
     String password, {
     required bool register,
+    String? username,
   }) async {
     await _run(() async {
       final result = await api.post(
         '/v1/auth/${register ? 'register' : 'login'}',
-        data: {'email': email.trim(), 'password': password},
+        data: {
+          'email': email.trim(),
+          'password': password,
+          if (register) 'username': username?.trim(),
+        },
         auth: false,
       );
       await _accept(result);
@@ -111,6 +116,7 @@ class AuthService extends ChangeNotifier {
   Future<bool> usernameAvailable(String value) async {
     final result = await api.get(
       '/v1/username/check?username=${Uri.encodeQueryComponent(value)}',
+      auth: false,
     );
     return result['available'] == true;
   }

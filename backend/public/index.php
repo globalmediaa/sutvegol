@@ -12,16 +12,20 @@ if ($path === '/health') output(['ok' => true, 'service' => 'sut-ve-gol', 'time'
 
 if ($method === 'POST' && $path === '/v1/auth/register') {
     rate_limit('register',8,300);
-    $data = body(); $email = mb_strtolower(trim((string) ($data['email'] ?? ''))); $password = (string) ($data['password'] ?? '');
+    $data = body(); $email = mb_strtolower(trim((string) ($data['email'] ?? ''))); $password = (string) ($data['password'] ?? ''); $username = trim((string) ($data['username'] ?? ''));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) fail('invalid_signup', 'Geçerli e-posta ve en az 8 karakter parola gerekli.');
+    if (!valid_username($username)) fail('invalid_username', '3–20 karakter; yalnızca harf, rakam ve alt çizgi kullan.');
     try {
         db()->beginTransaction();
-        db()->prepare('INSERT INTO users(public_id,email,password_hash) VALUES(?,?,?)')->execute([public_id(), $email, password_hash($password, PASSWORD_DEFAULT)]);
+        db()->prepare('INSERT INTO users(public_id,email,password_hash,username,username_key) VALUES(?,?,?,?,?)')->execute([public_id(), $email, password_hash($password, PASSWORD_DEFAULT), $username, username_key($username)]);
         $id = (int) db()->lastInsertId();
         db()->prepare('INSERT INTO identities(user_id,provider,provider_subject,email) VALUES(?,"email",?,?)')->execute([$id, $email, $email]);
         db()->commit();
     } catch (PDOException $error) {
         if (db()->inTransaction()) db()->rollBack();
+        $check = db()->prepare('SELECT email,username_key FROM users WHERE email=? OR username_key=? LIMIT 1');
+        $check->execute([$email, username_key($username)]); $conflict = $check->fetch();
+        if ($conflict && $conflict['username_key'] === username_key($username)) fail('username_taken', 'Bu kullanıcı adı alınmış.', 409);
         fail('email_taken', 'Bu e-posta zaten kayıtlı.', 409);
     }
     $query = db()->prepare('SELECT * FROM users WHERE id=?'); $query->execute([$id]); issue_session($query->fetch());
@@ -64,7 +68,7 @@ if ($method === 'POST' && $path === '/v1/auth/refresh') {
 if ($method === 'GET' && $path === '/v1/me') { $user = current_user(); output(['ok' => true, 'user' => public_user($user)]); }
 
 if ($method === 'GET' && $path === '/v1/username/check') {
-    current_user(); $name = trim((string) ($_GET['username'] ?? '')); $available = false;
+    rate_limit('username_check',60,60); $name = trim((string) ($_GET['username'] ?? '')); $available = false;
     if (valid_username($name)) { $query = db()->prepare('SELECT 1 FROM users WHERE username_key=?'); $query->execute([username_key($name)]); $available = !$query->fetchColumn(); }
     output(['ok' => true, 'valid' => valid_username($name), 'available' => $available]);
 }
