@@ -139,9 +139,17 @@ class SutVeGolGame extends FlameGame {
   @override
   void update(double dt) {
     if (state == GameState.paused) return; // perde açıkken sahne donar
-    // Kare atlamasında (ses yükleme vb.) top ileri zıplamasın.
-    dt = min(dt, 1 / 30);
-    super.update(dt);
+    // Kısa kare kayıplarında süreyi koru; fiziği küçük adımlarla ilerlet.
+    var remaining = dt.clamp(0.0, 0.1);
+    while (remaining > 0) {
+      final step = min(remaining, 1 / 120);
+      super.update(step);
+      _step(step);
+      remaining -= step;
+    }
+  }
+
+  void _step(double dt) {
     _clock += dt;
     if (fever) {
       feverTime -= dt;
@@ -206,6 +214,7 @@ class SutVeGolGame extends FlameGame {
   void kick(Vector2 chord, double dev, double tMax, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
+    haptic(HapticFeedback.lightImpact);
     Sfx.kick();
     ball.kick(chord, dev, tMax, power);
   }
@@ -259,8 +268,8 @@ class SutVeGolGame extends FlameGame {
     if (!inMouth) {
       // Auta / üstten: top görüş dışına gider.
       _pendingHit = false;
-      final dir = Vector2(end.x - ball.position.x, -1).normalized();
-      ball.flyOut(Vector2(dir.x * 0.6, -1)..normalize());
+      final velocity = ball.flightVelocity;
+      ball.flyOut(velocity.length2 > 0 ? velocity.normalized() : Vector2(0, -1));
       return;
     }
     _pendingHit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.55;
@@ -412,6 +421,7 @@ class SutVeGolGame extends FlameGame {
 
   void pause() {
     if (state == GameState.splash || state == GameState.paused || state == GameState.gameOver) return;
+    input.cancelGesture();
     _stateBeforePause = state;
     state = GameState.paused;
     overlays.add(kPauseOverlay);
@@ -424,6 +434,7 @@ class SutVeGolGame extends FlameGame {
   }
 
   void restart() {
+    input.cancelGesture();
     _queue.clear();
     overlays.remove(kGameOverOverlay);
     overlays.remove(kPauseOverlay);

@@ -69,7 +69,13 @@ class InputLayer extends PositionComponent
 
   Vector2? _start;
   final List<(Vector2, int)> _samples = [];
-  final Stopwatch _sw = Stopwatch()..start();
+  int? _pointer;
+
+  void cancelGesture() {
+    _pointer = null;
+    _start = null;
+    _samples.clear();
+  }
 
   @override
   void onTapUp(TapUpEvent event) {
@@ -79,39 +85,40 @@ class InputLayer extends PositionComponent
   @override
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
-    if (game.state != GameState.idle) {
-      _start = null;
-      return;
-    }
+    if (_pointer != null || game.state != GameState.idle) return;
+    if (kPauseRect.contains(event.localPosition.toOffset())) return;
+    _pointer = event.pointerId;
     _start = event.localPosition.clone();
     _samples
       ..clear()
-      ..add((_start!.clone(), _sw.elapsedMilliseconds));
+      ..add((_start!.clone(), (event.raw.sourceTimeStamp ?? Duration.zero).inMicroseconds));
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
-    if (_start == null) return;
-    _samples.add((event.localEndPosition.clone(), _sw.elapsedMilliseconds));
-    if (_samples.length > 80) _samples.removeAt(0);
+    if (_start == null || event.pointerId != _pointer) return;
+    // Flame localStartPosition zaten mevcut globalPosition değeridir;
+    // localEndPosition kullanmak son deltayı ikinci kez ekler.
+    _samples.add((event.localStartPosition.clone(), event.timestamp.inMicroseconds));
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    _finish();
+    if (event.pointerId == _pointer) _finish();
   }
 
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
-    _start = null;
+    if (event.pointerId == _pointer) cancelGesture();
   }
 
   void _finish() {
     final start = _start;
     _start = null;
+    _pointer = null;
     if (start == null || _samples.length < 2 || game.state != GameState.idle) return;
     final end = _samples.last;
     final vec = end.$1 - start;
@@ -120,13 +127,15 @@ class InputLayer extends PositionComponent
     // Son ~90 ms'nin hızı (px/s) → güç; uzunluk da katkı verir.
     var early = _samples.first;
     for (final s in _samples) {
-      if (end.$2 - s.$2 <= 90) {
+      if (end.$2 - s.$2 <= 90000) {
         early = s;
         break;
       }
     }
-    final dtMs = max(1, end.$2 - early.$2);
-    final vel = (end.$1 - early.$1) / (dtMs / 1000);
+    // Seyrek olaylarda tek örnekten sıfır hız üretme.
+    if (early == end) early = _samples[_samples.length - 2];
+    final dtSeconds = max(0.001, (end.$2 - early.$2) / 1000000);
+    final vel = (end.$1 - early.$1) / dtSeconds;
     final speed = vel.length.clamp(0, 9000).toDouble();
     // Dünya px/s (ekranın 3 katı): yavaş ~1500, normal ~3000-4000, sert ~6000+.
     final speedNorm = ((speed - 1000) / 3800).clamp(0.0, 1.0);

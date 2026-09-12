@@ -64,7 +64,9 @@ enum BallPhase { hidden, entering, idle, flying, dropping, netting, out }
 class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
   Ball() : super(anchor: Anchor.center, priority: 20);
 
-  static const double flightDur = 0.5;
+  double flightDur = 0.5;
+  final Vector2 flightVelocity = Vector2.zero();
+  double _outScale = 0;
   static const double enterDur = 0.55;
   static const double dropDur = 0.45;
 
@@ -121,6 +123,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
     final g = game.view;
     phase = BallPhase.flying;
     _t = 0;
+    flightDur = 0.68 - 0.24 * power.clamp(0.0, 1.0);
     _start = position.clone();
     _startScale = scale.x;
     final trackEndY = g.groundY - goalRadius;
@@ -153,7 +156,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
     _ctrl = _start + c * (k * tm) + n * (dev * k * 2.4);
     final midX = (_start.x + _xEnd) / 2;
     _ctrl.x = midX + (_ctrl.x - midX).clamp(-480.0, 480.0);
-    _spin = 14 + dev.sign * 10;
+    _spin = 12 + dev.clamp(-160.0, 160.0) / 16;
   }
 
   /// Fileye/hedefe çarptıktan sonra ağ boyunca yere düşüş (derine küçülerek).
@@ -172,6 +175,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
     _t = 0;
     _dropFrom = position.clone();
     _dropTo = position + dir * 500;
+    _outScale = scale.x;
   }
 
   double _netStartScale = 0.2;
@@ -211,7 +215,10 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
         _t += dt;
         final z = (_t / flightDur).clamp(0.0, 1.0);
         // Yer izi (gölge): ekranda hızlı başlar, kaleye yaklaşırken yavaşlar.
-        final sProg = 1 - pow(1 - z, 1.4).toDouble();
+        // Aynı perspektif parametresi konumu ve boyutu birlikte taşır.
+        final depthRatio = _startScale / g.ballGoalScale;
+        final sc = _startScale / (1 + (depthRatio - 1) * z);
+        final sProg = z * depthRatio / (1 + (depthRatio - 1) * z);
         final u = 1 - sProg;
         final r0 = kBallDiameter / 2 * _startScale;
         final gStartY = _start.y + r0; // yerle temas noktası
@@ -219,13 +226,14 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
         final gx = u * u * _start.x + 2 * u * sProg * _ctrl.x + sProg * sProg * _xEnd;
         final ctrlGy = u * u * gStartY + 2 * u * sProg * (_ctrl.y + r0) + sProg * sProg * gEndY;
         _groundY = ctrlGy;
-        // Boyut zamanla doğrusal küçülür (videodan ölçüldü).
-        final sc = _lerp(_startScale, g.ballGoalScale, z);
+        // Boyut, uzaklığa bağlı perspektif ölçeğini izler.
         scale = Vector2.all(sc);
         // Dünya yüksekliği: parabol yay + hedef yüksekliğine doğrusal çıkış.
         final hWorld = 4 * _apexWorld * z * (1 - z) + _hEndWorld * z;
         _height = hWorld * sc;
-        position = Vector2(gx, _groundY - radius - _height);
+        final nextPosition = Vector2(gx, _groundY - radius - _height);
+        if (dt > 0) flightVelocity.setFrom((nextPosition - position) / dt);
+        position = nextPosition;
         _angle += _spin * dt;
         if (z >= 1) {
           final end = position.clone();
@@ -257,7 +265,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
         _t += dt;
         final k = (_t / 0.3).clamp(0.0, 1.0);
         position = Vector2(_lerp(_dropFrom.x, _dropTo.x, k), _lerp(_dropFrom.y, _dropTo.y, k));
-        scale = Vector2.all(_lerp(_startScale * 0.2, _startScale * 0.12, k));
+        scale = Vector2.all(_lerp(_outScale, _outScale * 0.6, k));
         _groundY = position.y + 200;
         _height = 200;
         _angle += 9 * dt;
@@ -289,6 +297,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
 
   @override
   void render(Canvas canvas) {
+    if (phase == BallPhase.hidden) return;
     final s = scale.x;
     canvas.save();
     canvas.translate(size.x / 2, size.y / 2);
