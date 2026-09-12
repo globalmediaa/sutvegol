@@ -116,7 +116,8 @@ class SplashLayer extends PositionComponent
     for (final e in _embers) {
       e.render(canvas, k);
     }
-    paintLogo(canvas, const Rect.fromLTWH(60, 760, 1200, 620), reveal: k);
+    // Açılışta App Store ve ana ekranla aynı kare marka ikonu kullanılır.
+    paintBrandIcon(canvas, const Rect.fromLTWH(280, 650, 760, 760), reveal: k);
     if (k >= 1) {
       final tip = TextPaint(
         style: TextStyle(

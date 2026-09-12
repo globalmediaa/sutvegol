@@ -14,6 +14,30 @@ Future<void> loadBrandIdentity() async {
   _brandIcon = (await codec.getNextFrame()).image;
 }
 
+/// Uygulama ikonunu kırpmadan, verilen kare alana birebir çizer.
+void paintBrandIcon(
+  ui.Canvas canvas,
+  ui.Rect box, {
+  double alpha = 1,
+  double reveal = 1,
+}) {
+  final icon = _brandIcon;
+  if (icon == null) return;
+  final k = reveal.clamp(0.0, 1.0);
+  canvas.saveLayer(
+    box,
+    Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k),
+  );
+  canvas.translate(0, (1 - k) * 20);
+  canvas.drawImageRect(
+    icon,
+    ui.Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
+    box,
+    Paint()..filterQuality = FilterQuality.high,
+  );
+  canvas.restore();
+}
+
 /// Uygulama ikonu ile aynı S biçimli şut yolu, top ve kale amblemi.
 void paintLogo(
   ui.Canvas canvas,
