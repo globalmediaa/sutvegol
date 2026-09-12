@@ -7,6 +7,8 @@ import '../services/auth_service.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
+const bool kSocialAuthEnabled = bool.fromEnvironment('SOCIAL_AUTH');
+
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.onGuest});
   final VoidCallback onGuest;
@@ -60,7 +62,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: FK.t(size: 16, color: FK.muted, height: 1.45),
                   ),
                   const SizedBox(height: 26),
-                  if (!kIsWeb && Platform.isIOS) ...[
+                  if (kSocialAuthEnabled && !kIsWeb && Platform.isIOS) ...[
                     _social(
                       Icons.apple,
                       'Apple ile devam et',
@@ -69,24 +71,26 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  _social(
-                    Icons.g_mobiledata_rounded,
-                    'Google ile devam et',
-                    () => run(auth.google),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Row(
-                      children: [
-                        Expanded(child: Divider()),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Text('veya'),
-                        ),
-                        Expanded(child: Divider()),
-                      ],
+                  if (kSocialAuthEnabled)
+                    _social(
+                      Icons.g_mobiledata_rounded,
+                      'Google ile devam et',
+                      () => run(auth.google),
                     ),
-                  ),
+                  if (kSocialAuthEnabled)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 22),
+                      child: Row(
+                        children: [
+                          Expanded(child: Divider()),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Text('veya'),
+                          ),
+                          Expanded(child: Divider()),
+                        ],
+                      ),
+                    ),
                   TextField(
                     controller: email,
                     keyboardType: TextInputType.emailAddress,
