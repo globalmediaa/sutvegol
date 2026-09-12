@@ -9,11 +9,13 @@ import 'sut_ve_gol_game.dart';
 import 'geometry.dart';
 import 'sfx.dart';
 
-double _easeInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
+double _easeInOut(double t) =>
+    t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
 
 /// Açılış: gece göğü + "Yükleniyor", sonra logo alev izleriyle belirir,
 /// köz parçacıkları yükselir, kamera sokağa iner.
-class SplashLayer extends PositionComponent with HasGameReference<SutVeGolGame> {
+class SplashLayer extends PositionComponent
+    with HasGameReference<SutVeGolGame> {
   SplashLayer() : super(size: Vector2(kWorldW, kWorldH), priority: 50);
 
   static const double loading = 0.9;
@@ -73,7 +75,11 @@ class SplashLayer extends PositionComponent with HasGameReference<SutVeGolGame> 
   @override
   void render(Canvas canvas) {
     final drift = min(0.0, -140 + max(0.0, _t - loading) * 60);
-    _sky.render(canvas, position: Vector2(0, drift), size: Vector2(kWorldW, kWorldH + 140));
+    _sky.render(
+      canvas,
+      position: Vector2(0, drift),
+      size: Vector2(kWorldW, kWorldH + 140),
+    );
 
     if (_t < loading) {
       final fade = _t > loading - 0.25 ? (loading - _t) / 0.25 : 1.0;
@@ -89,7 +95,12 @@ class SplashLayer extends PositionComponent with HasGameReference<SutVeGolGame> 
           ..strokeWidth = 6
           ..strokeCap = StrokeCap.round,
       );
-      _loadingText.render(canvas, 'Yükleniyor', Vector2(kWorldW / 2, kWorldH / 2 + 34), anchor: Anchor.center);
+      _loadingText.render(
+        canvas,
+        'Yükleniyor',
+        Vector2(kWorldW / 2, kWorldH / 2 + 34),
+        anchor: Anchor.center,
+      );
       return;
     }
 
@@ -112,11 +123,21 @@ class SplashLayer extends PositionComponent with HasGameReference<SutVeGolGame> 
           fontSize: 38,
           fontWeight: FontWeight.w600,
           fontFamily: 'TitilliumWeb',
-          color: Color.fromRGBO(221, 228, 245, 0.55 + 0.45 * ((sin(_t * 4) + 1) / 2)),
+          color: Color.fromRGBO(
+            221,
+            228,
+            245,
+            0.55 + 0.45 * ((sin(_t * 4) + 1) / 2),
+          ),
           letterSpacing: 1,
         ),
       );
-      tip.render(canvas, 'Kaydır ve şut çek', Vector2(kWorldW / 2, 1560), anchor: Anchor.center);
+      tip.render(
+        canvas,
+        'Kaydır ve şut çek',
+        Vector2(kWorldW / 2, 1560),
+        anchor: Anchor.center,
+      );
     }
   }
 }

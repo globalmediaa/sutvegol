@@ -3,7 +3,16 @@ import 'dart:ui';
 /// 7-segment LED rakam çizimi — hem Flame tabelası hem Flutter kartı kullanır.
 /// a b c d e f g -> bit 6..0
 const List<int> kSevenSegDigits = [
-  0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70, 0x7F, 0x7B,
+  0x7E,
+  0x30,
+  0x6D,
+  0x79,
+  0x33,
+  0x5B,
+  0x5F,
+  0x70,
+  0x7F,
+  0x7B,
 ];
 
 /// [rect] içine 6 haneli değeri çizer. [leadingColor] verilirse baştaki sıfırlar
@@ -36,7 +45,14 @@ void drawSevenSegmentRow(
   canvas.restore();
 }
 
-void drawSevenSegmentDigit(Canvas canvas, int d, double dw, double h, Color color, Color? off) {
+void drawSevenSegmentDigit(
+  Canvas canvas,
+  int d,
+  double dw,
+  double h,
+  Color color,
+  Color? off,
+) {
   final t = h * 0.17;
   final onPaint = Paint()..color = color;
   final offPaint = Paint()..color = off ?? color.withAlpha(0x16);
@@ -54,6 +70,9 @@ void drawSevenSegmentDigit(Canvas canvas, int d, double dw, double h, Color colo
   for (var i = 0; i < 7; i++) {
     final lit = (bits >> (6 - i)) & 1 == 1;
     if (!lit && off == null && color.a == 0) continue;
-    canvas.drawRRect(RRect.fromRectAndRadius(segs[i].deflate(1.2), r), lit ? onPaint : offPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(segs[i].deflate(1.2), r),
+      lit ? onPaint : offPaint,
+    );
   }
 }

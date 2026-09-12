@@ -2,7 +2,14 @@ import 'package:flutter/material.dart' show IconData, Icons;
 
 /// Sıralama için yerel örnek veri (sunucu yok). Avatarlar isimden üretilir.
 class LbEntry {
-  const LbEntry(this.name, this.pts, {this.level = 3, this.badges = 2, this.likes = 0, this.street = false});
+  const LbEntry(
+    this.name,
+    this.pts, {
+    this.level = 3,
+    this.badges = 2,
+    this.likes = 0,
+    this.street = false,
+  });
   final String name;
   final int pts;
   final int level;
@@ -14,13 +21,23 @@ class LbEntry {
 
   /// Kazanılmış rozetler (sırayla ilk N; "Sen" için Hoş geldin + Profil fotoğrafı).
   List<FkBadge> get earnedBadges => name == kMeName
-      ? [kBadges.firstWhere((b) => b.id == 'welcome'), kBadges.firstWhere((b) => b.id == 'profile_picture')]
+      ? [
+          kBadges.firstWhere((b) => b.id == 'welcome'),
+          kBadges.firstWhere((b) => b.id == 'profile_picture'),
+        ]
       : kBadges.take(badges.clamp(0, kBadges.length)).toList();
 }
 
 /// Rozet tanımı: gradyanlı yuvarlak kare (ikon ya da sayı); outline = çerçeveli.
 class FkBadge {
-  const FkBadge(this.id, this.label, this.color, {this.icon, this.text, this.outline = false});
+  const FkBadge(
+    this.id,
+    this.label,
+    this.color, {
+    this.icon,
+    this.text,
+    this.outline = false,
+  });
   final String id;
   final String label;
   final int color;
@@ -43,7 +60,12 @@ const int _darkRed = 0xFF7F1D1D;
 
 /// Rozetler: oyun içi başarılar + sahne/seri ödülleri.
 const List<FkBadge> kBadges = [
-  FkBadge('profile_picture', 'Profil fotoğrafı', _orange, icon: Icons.account_circle),
+  FkBadge(
+    'profile_picture',
+    'Profil fotoğrafı',
+    _orange,
+    icon: Icons.account_circle,
+  ),
   FkBadge('complete_profile', 'Profil tamam', _yellow, icon: Icons.list_alt),
   FkBadge('first_goal', 'İlk gol', _green, icon: Icons.sports_soccer),
   FkBadge('hat_trick', 'Hat-trick', _green, text: '3'),
@@ -51,7 +73,12 @@ const List<FkBadge> kBadges = [
   FkBadge('beach_king', 'Sahil kralı', 0xFFFF5C8A, icon: Icons.beach_access),
   FkBadge('cage_king', 'Halı saha kralı', _lightBlue, icon: Icons.sports),
   FkBadge('stadium_king', 'Stadyum kralı', _yellow, icon: Icons.stadium),
-  FkBadge('king_mode_1', 'İlk Kral Modu', _orange, icon: Icons.local_fire_department),
+  FkBadge(
+    'king_mode_1',
+    'İlk Kral Modu',
+    _orange,
+    icon: Icons.local_fire_department,
+  ),
   FkBadge('king_mode_10', '10 Kral Modu', _orange, text: '10'),
   FkBadge('king_mode_50', '50 Kral Modu', _orange, text: '50'),
   FkBadge('streak_10', '10 seri', _teal, text: '10'),
@@ -149,10 +176,16 @@ const List<LbEntry> _allTime = [
 
 enum LbTab { month, season, allTime }
 
-List<LbEntry> lbEntries(LbTab t) => switch (t) { LbTab.month => _month, LbTab.season => _season, LbTab.allTime => _allTime };
+List<LbEntry> lbEntries(LbTab t) => switch (t) {
+  LbTab.month => _month,
+  LbTab.season => _season,
+  LbTab.allTime => _allTime,
+};
 
 /// Eşit puanlar aynı sırayı paylaşır (1, 1, 3 ...).
-int rankAt(List<LbEntry> list, int i) => list.indexWhere((e) => e.pts == list[i].pts) + 1;
+int rankAt(List<LbEntry> list, int i) =>
+    list.indexWhere((e) => e.pts == list[i].pts) + 1;
 
 /// Oyuncunun listedeki yeri: kendinden yüksek puanlıların sayısı + 1.
-int rankFor(List<LbEntry> list, int score) => list.where((e) => e.pts > score).length + 1;
+int rankFor(List<LbEntry> list, int score) =>
+    list.where((e) => e.pts > score).length + 1;

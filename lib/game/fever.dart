@@ -11,7 +11,8 @@ import 'geometry.dart';
 double _easeOut(double t) => 1 - pow(1 - t, 3).toDouble();
 
 /// KRAL MODU: altın-turuncu parıltı, bokeh, kıvılcımlar ve taçlı "KRAL MODU" levhası.
-class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame> {
+class FeverOverlay extends PositionComponent
+    with HasGameReference<SutVeGolGame> {
   FeverOverlay() : super(size: Vector2(kWorldW, kWorldH), priority: 26);
 
   double _alpha = 0; // 0..1 görünürlük
@@ -25,20 +26,24 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
   Future<void> onLoad() async {
     final rng = Random(7);
     for (var i = 0; i < 9; i++) {
-      _bokeh.add(_Bokeh(
-        Vector2(rng.nextDouble() * kWorldW, 900 + rng.nextDouble() * 1900),
-        90 + rng.nextDouble() * 160,
-        0.4 + rng.nextDouble() * 0.8,
-        rng.nextDouble() * pi * 2,
-      ));
+      _bokeh.add(
+        _Bokeh(
+          Vector2(rng.nextDouble() * kWorldW, 900 + rng.nextDouble() * 1900),
+          90 + rng.nextDouble() * 160,
+          0.4 + rng.nextDouble() * 0.8,
+          rng.nextDouble() * pi * 2,
+        ),
+      );
     }
     for (var i = 0; i < 22; i++) {
-      _sparks.add(_Spark(
-        Vector2(rng.nextDouble() * kWorldW, 700 + rng.nextDouble() * 2100),
-        rng.nextDouble() * pi * 2,
-        0.8 + rng.nextDouble() * 1.6,
-        10 + rng.nextDouble() * 16,
-      ));
+      _sparks.add(
+        _Spark(
+          Vector2(rng.nextDouble() * kWorldW, 700 + rng.nextDouble() * 2100),
+          rng.nextDouble() * pi * 2,
+          0.8 + rng.nextDouble() * 1.6,
+          10 + rng.nextDouble() * 16,
+        ),
+      );
     }
   }
 
@@ -47,7 +52,9 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
     _t += dt;
     final target = game.fever ? 1.0 : 0.0;
     final speed = game.fever ? dt / 0.5 : dt / 0.7;
-    _alpha = target > _alpha ? min(target, _alpha + speed) : max(target, _alpha - speed);
+    _alpha = target > _alpha
+        ? min(target, _alpha + speed)
+        : max(target, _alpha - speed);
     for (final b in _bokeh) {
       b.pos.y -= 18 * b.speed * dt;
       b.pos.x += sin(_t * 0.7 + b.phase) * 10 * dt;
@@ -81,7 +88,11 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
         ..shader = Gradient.linear(
           const Offset(0, 0),
           const Offset(0, kWorldH),
-          [Color.fromRGBO(255, 160, 40, 0.24 * a), Color.fromRGBO(255, 200, 100, 0.0), Color.fromRGBO(255, 150, 40, 0.24 * a)],
+          [
+            Color.fromRGBO(255, 160, 40, 0.24 * a),
+            Color.fromRGBO(255, 200, 100, 0.0),
+            Color.fromRGBO(255, 150, 40, 0.24 * a),
+          ],
           const [0.0, 0.35, 1.0],
         ),
     );
@@ -125,7 +136,11 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
 
   /// Lacivert plaka, altın çerçeve, üstte taç, "KRAL MODU" altın yazı.
   void _drawPlaque(Canvas canvas, double a) {
-    final rect = Rect.fromCenter(center: const Offset(0, 10), width: 560, height: 150);
+    final rect = Rect.fromCenter(
+      center: const Offset(0, 10),
+      width: 560,
+      height: 150,
+    );
     final rr = RRect.fromRectAndRadius(rect, const Radius.circular(28));
     canvas.drawRRect(
       rr.inflate(14),
@@ -136,7 +151,10 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
     canvas.drawRRect(
       rr,
       Paint()
-        ..shader = Gradient.linear(rect.topLeft, rect.bottomLeft, [Color.fromRGBO(30, 44, 99, a), Color.fromRGBO(11, 18, 38, a)]),
+        ..shader = Gradient.linear(rect.topLeft, rect.bottomLeft, [
+          Color.fromRGBO(30, 44, 99, a),
+          Color.fromRGBO(11, 18, 38, a),
+        ]),
     );
     canvas.drawRRect(
       rr,
@@ -151,9 +169,20 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
     for (var x = rect.left + 24; x < rect.right; x += 44) {
       for (final y in [rect.top, rect.bottom]) {
         final on = (i + phase) % 2 == 0;
-        canvas.drawCircle(Offset(x, y), 7, Paint()..color = Color.fromRGBO(255, on ? 245 : 190, on ? 160 : 60, a));
+        canvas.drawCircle(
+          Offset(x, y),
+          7,
+          Paint()
+            ..color = Color.fromRGBO(255, on ? 245 : 190, on ? 160 : 60, a),
+        );
         if (on) {
-          canvas.drawCircle(Offset(x, y), 12, Paint()..color = Color.fromRGBO(255, 220, 120, 0.5 * a)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+          canvas.drawCircle(
+            Offset(x, y),
+            12,
+            Paint()
+              ..color = Color.fromRGBO(255, 220, 120, 0.5 * a)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+          );
         }
         i++;
       }
@@ -167,8 +196,19 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
     const size = 92.0;
     for (var d = 6; d >= 1; d--) {
       TextPaint(
-        style: TextStyle(fontSize: size, fontWeight: FontWeight.w700, fontFamily: 'TitilliumWeb', color: Color.fromRGBO(120, 70, 0, a), letterSpacing: 4),
-      ).render(canvas, text, Vector2(0, 14 + d.toDouble()), anchor: Anchor.center);
+        style: TextStyle(
+          fontSize: size,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'TitilliumWeb',
+          color: Color.fromRGBO(120, 70, 0, a),
+          letterSpacing: 4,
+        ),
+      ).render(
+        canvas,
+        text,
+        Vector2(0, 14 + d.toDouble()),
+        anchor: Anchor.center,
+      );
     }
     TextPaint(
       style: TextStyle(
@@ -180,7 +220,11 @@ class FeverOverlay extends PositionComponent with HasGameReference<SutVeGolGame>
           ..shader = Gradient.linear(
             const Offset(0, -40),
             const Offset(0, 50),
-            [Color.fromRGBO(255, 240, 150, a), Color.fromRGBO(255, 196, 40, a), Color.fromRGBO(240, 150, 20, a)],
+            [
+              Color.fromRGBO(255, 240, 150, a),
+              Color.fromRGBO(255, 196, 40, a),
+              Color.fromRGBO(240, 150, 20, a),
+            ],
             const [0, 0.55, 1],
           ),
       ),
@@ -235,7 +279,8 @@ class FeverBurst extends PositionComponent {
 
 /// Sahne geçiş afişi: "YENİ SAHNE" + sahne adı, ortadan büyüyüp söner.
 class StageBanner extends PositionComponent {
-  StageBanner(this.stage) : super(position: Vector2(kWorldW / 2, kWorldH * 0.42), priority: 28);
+  StageBanner(this.stage)
+    : super(position: Vector2(kWorldW / 2, kWorldH * 0.42), priority: 28);
   final Stage stage;
   double _t = 0;
   static const double dur = 2.0;
@@ -256,14 +301,37 @@ class StageBanner extends PositionComponent {
     canvas.scale(0.7 + 0.3 * inK);
     final rect = Rect.fromCenter(center: Offset.zero, width: 760, height: 220);
     final rr = RRect.fromRectAndRadius(rect, const Radius.circular(32));
-    canvas.drawRRect(rr.inflate(12), Paint()..color = stage.accent.withValues(alpha: 0.45 * a)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30));
+    canvas.drawRRect(
+      rr.inflate(12),
+      Paint()
+        ..color = stage.accent.withValues(alpha: 0.45 * a)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30),
+    );
     canvas.drawRRect(rr, Paint()..color = Color.fromRGBO(11, 18, 38, 0.92 * a));
-    canvas.drawRRect(rr, Paint()..color = stage.accent.withValues(alpha: a)..style = PaintingStyle.stroke..strokeWidth = 6);
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = stage.accent.withValues(alpha: a)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6,
+    );
     TextPaint(
-      style: TextStyle(fontSize: 36, fontWeight: FontWeight.w600, fontFamily: 'TitilliumWeb', color: Color.fromRGBO(154, 166, 200, a), letterSpacing: 10),
+      style: TextStyle(
+        fontSize: 36,
+        fontWeight: FontWeight.w600,
+        fontFamily: 'TitilliumWeb',
+        color: Color.fromRGBO(154, 166, 200, a),
+        letterSpacing: 10,
+      ),
     ).render(canvas, 'YENİ SAHNE', Vector2(0, -52), anchor: Anchor.center);
     TextPaint(
-      style: TextStyle(fontSize: 104, fontWeight: FontWeight.w700, fontFamily: 'TitilliumWeb', color: stage.accent.withValues(alpha: a), letterSpacing: 6),
+      style: TextStyle(
+        fontSize: 104,
+        fontWeight: FontWeight.w700,
+        fontFamily: 'TitilliumWeb',
+        color: stage.accent.withValues(alpha: a),
+        letterSpacing: 6,
+      ),
     ).render(canvas, stage.label, Vector2(0, 24), anchor: Anchor.center);
     canvas.restore();
   }

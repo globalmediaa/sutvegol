@@ -39,7 +39,8 @@ void main() {
         const MaterialApp(home: LeaderboardScreen(myScore: 30)),
       );
       await tester.pumpAndSettle();
-      expect(find.text('420'), findsOneWidget);
+      expect(find.text('Sıralama'), findsOneWidget);
+      expect(find.text('Sıralama yüklenemedi'), findsOneWidget);
       expect(find.text('Kerem'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 2));

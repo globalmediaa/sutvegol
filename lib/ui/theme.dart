@@ -40,11 +40,26 @@ class FK {
     Color color = text,
     double? spacing,
     double height = 1.1,
-  }) =>
-      TextStyle(fontFamily: font, fontSize: size, fontWeight: w, color: color, letterSpacing: spacing, height: height);
+  }) => TextStyle(
+    fontFamily: font,
+    fontSize: size,
+    fontWeight: w,
+    color: color,
+    letterSpacing: spacing,
+    height: height,
+  );
 
   /// Turuncu buton/parıltı gölgesi.
-  static List<BoxShadow> glow(double blur, {Color color = orange, double alpha = 0.45, double dy = 6}) => [
-        BoxShadow(color: color.withValues(alpha: alpha), blurRadius: blur, offset: Offset(0, dy)),
-      ];
+  static List<BoxShadow> glow(
+    double blur, {
+    Color color = orange,
+    double alpha = 0.45,
+    double dy = 6,
+  }) => [
+    BoxShadow(
+      color: color.withValues(alpha: alpha),
+      blurRadius: blur,
+      offset: Offset(0, dy),
+    ),
+  ];
 }

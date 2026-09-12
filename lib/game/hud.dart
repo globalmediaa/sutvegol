@@ -44,12 +44,24 @@ class Scoreboard extends PositionComponent with HasGameReference<SutVeGolGame> {
       final blinkOn = justLost && ((_heartFlash * 10).floor() % 2 == 0);
       canvas.save();
       canvas.translate(c.x, c.y);
-      SceneArt.paintHeart(canvas, 54 * hs, 48 * hs, heartRed, dead: !alive && !blinkOn);
+      SceneArt.paintHeart(
+        canvas,
+        54 * hs,
+        48 * hs,
+        heartRed,
+        dead: !alive && !blinkOn,
+      );
       canvas.restore();
     }
   }
 
-  void _drawRow(Canvas canvas, Rect rect, int value, Color color, double pulse) {
+  void _drawRow(
+    Canvas canvas,
+    Rect rect,
+    int value,
+    Color color,
+    double pulse,
+  ) {
     canvas.save();
     canvas.translate(rect.left, rect.top);
     if (pulse != 1) {
@@ -57,7 +69,12 @@ class Scoreboard extends PositionComponent with HasGameReference<SutVeGolGame> {
       canvas.scale(pulse);
       canvas.translate(-rect.width / 2, -rect.height / 2);
     }
-    drawSevenSegmentRow(canvas, Rect.fromLTWH(0, 0, rect.width, rect.height), value, color);
+    drawSevenSegmentRow(
+      canvas,
+      Rect.fromLTWH(0, 0, rect.width, rect.height),
+      value,
+      color,
+    );
     canvas.restore();
   }
 }
@@ -91,7 +108,10 @@ class InputLayer extends PositionComponent
     _start = event.localPosition.clone();
     _samples
       ..clear()
-      ..add((_start!.clone(), (event.raw.sourceTimeStamp ?? Duration.zero).inMicroseconds));
+      ..add((
+        _start!.clone(),
+        (event.raw.sourceTimeStamp ?? Duration.zero).inMicroseconds,
+      ));
   }
 
   @override
@@ -100,7 +120,10 @@ class InputLayer extends PositionComponent
     if (_start == null || event.pointerId != _pointer) return;
     // Flame localStartPosition zaten mevcut globalPosition değeridir;
     // localEndPosition kullanmak son deltayı ikinci kez ekler.
-    _samples.add((event.localStartPosition.clone(), event.timestamp.inMicroseconds));
+    _samples.add((
+      event.localStartPosition.clone(),
+      event.timestamp.inMicroseconds,
+    ));
   }
 
   @override
@@ -119,7 +142,9 @@ class InputLayer extends PositionComponent
     final start = _start;
     _start = null;
     _pointer = null;
-    if (start == null || _samples.length < 2 || game.state != GameState.idle) return;
+    if (start == null || _samples.length < 2 || game.state != GameState.idle) {
+      return;
+    }
     final end = _samples.last;
     final vec = end.$1 - start;
     if (vec.y > -60 || vec.length < 80) return;

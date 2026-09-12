@@ -26,7 +26,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - Kaleci 1: 30 puan; kaleci 2: 420 puan. Genlik kale genişliği + 110 px, periyot skorla kısalır.
 - **Sahneler:** Sokak 0+, Sahil 300+, Halı Saha 700+, Stadyum 1200+ (`Stage.minScore`). Geçiş bir sonraki topta: geniş kamera, crossfade, "YENİ SAHNE" afişi, fanfar, ambiyans değişimi. Yeniden başlatmada sokağa dönülür.
 - Her şuttan sonra %40 geniş ↔ yakın kamera (aynı sahnenin diğer görünümü).
-- Leaderboard verisi yerel (`mock_data.dart`); sunucu bağlanınca `lbEntries` değiştirilecek. Avatarlar isimden üretilir (fotoğraf yok).
+- Leaderboard API üzerinden gerçek kullanıcıları ve doğrulanmış skorları gösterir. Avatarlar kullanıcı adından üretilir.
 
 ## Geliştirme bayrakları
 - `--dart-define=AUTOPLAY=true` → oyun kendi kendine oynar.

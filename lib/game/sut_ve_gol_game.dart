@@ -36,12 +36,12 @@ class _Scheduled {
 
 class SutVeGolGame extends FlameGame {
   SutVeGolGame()
-      : super(
-          camera: CameraComponent.withFixedResolution(
-            width: kWorldW,
-            height: kWorldH,
-          ),
-        );
+    : super(
+        camera: CameraComponent.withFixedResolution(
+          width: kWorldW,
+          height: kWorldH,
+        ),
+      );
 
   final Random rng = Random();
 
@@ -52,6 +52,12 @@ class SutVeGolGame extends FlameGame {
   int score = 0;
   int best = 0;
   int lives = 3;
+  int runShots = 0;
+  int runHits = 0;
+  int runMisses = 0;
+  int runFeverHits = 0;
+  int runMaxStreak = 0;
+  DateTime _runStartedAt = DateTime.now();
 
   // Seri / Kral Modu.
   int streak = 0;
@@ -85,7 +91,10 @@ class SutVeGolGame extends FlameGame {
   Future<void> onLoad() async {
     camera.viewfinder.anchor = Anchor.topLeft;
     if (kStageOverride.isNotEmpty) {
-      stage = Stage.values.firstWhere((s) => s.name == kStageOverride, orElse: () => Stage.street);
+      stage = Stage.values.firstWhere(
+        (s) => s.name == kStageOverride,
+        orElse: () => Stage.street,
+      );
     }
     // Tüm görseller koddan üretilir (scene_art.dart).
     images.add('ball', await SceneArt.ball());
@@ -104,14 +113,18 @@ class SutVeGolGame extends FlameGame {
     scene = SceneRoot()..position = Vector2(0, kWorldH);
     background = Background();
     target = TargetComp();
-    keepers = [
-      Keeper(),
-      Keeper(phaseOffset: pi / 2, periodScale: 0.8),
-    ];
+    keepers = [Keeper(), Keeper(phaseOffset: pi / 2, periodScale: 0.8)];
     ball = Ball();
     scoreboard = Scoreboard();
     feverOverlay = FeverOverlay();
-    scene.addAll([background, target, ...keepers, ball, feverOverlay, scoreboard]);
+    scene.addAll([
+      background,
+      target,
+      ...keepers,
+      ball,
+      feverOverlay,
+      scoreboard,
+    ]);
 
     input = InputLayer();
     splash = SplashLayer();
@@ -182,14 +195,24 @@ class SutVeGolGame extends FlameGame {
     if (_autoIdle < 0.9) return;
     _autoIdle = 0;
     final miss = rng.nextDouble() < 0.15;
-    final jitter = Vector2(rng.nextDouble() * 50 - 25, rng.nextDouble() * 50 - 25);
+    final jitter = Vector2(
+      rng.nextDouble() * 50 - 25,
+      rng.nextDouble() * 50 - 25,
+    );
     final aim = miss
-        ? Vector2(view.goalCenterX + (rng.nextBool() ? 1 : -1) * 350, view.groundY - 60)
+        ? Vector2(
+            view.goalCenterX + (rng.nextBool() ? 1 : -1) * 350,
+            view.groundY - 60,
+          )
         : target.position + jitter;
     final rGoal = kBallDiameter / 2 * view.ballGoalScale;
     final trackEndY = view.groundY - rGoal;
-    final chord = Vector2(aim.x - ball.position.x, trackEndY - ball.position.y) * 0.4;
-    final power = ((trackEndY - aim.y) / (view.goalHeight * 1.15)).clamp(0.0, 1.0);
+    final chord =
+        Vector2(aim.x - ball.position.x, trackEndY - ball.position.y) * 0.4;
+    final power = ((trackEndY - aim.y) / (view.goalHeight * 1.15)).clamp(
+      0.0,
+      1.0,
+    );
     kick(chord, rng.nextDouble() * 120 - 60, 0.5, power);
   }
 
@@ -202,6 +225,8 @@ class SutVeGolGame extends FlameGame {
     scene.position = Vector2.zero();
     target.spawn();
     ball.enter();
+    _resetRunStats();
+    onRunStarted?.call();
   }
 
   void onBallReady() {
@@ -214,6 +239,7 @@ class SutVeGolGame extends FlameGame {
   void kick(Vector2 chord, double dev, double tMax, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
+    runShots++;
     haptic(HapticFeedback.lightImpact);
     Sfx.kick();
     ball.kick(chord, dev, tMax, power);
@@ -247,40 +273,62 @@ class SutVeGolGame extends FlameGame {
     // Kaleci bloğu: top mankenin önüne düşer.
     if (keepers.any((k) => k.blocks(end, r))) {
       _pendingHit = false;
-      ball.drop(end, Vector2(end.x + (rng.nextDouble() * 60 - 30), g.railY - r));
+      ball.drop(
+        end,
+        Vector2(end.x + (rng.nextDouble() * 60 - 30), g.railY - r),
+      );
       return;
     }
 
     // Direk / üst direk: top düşer, yerde tekrar değerlendirilir.
     final postL = g.goalLeft - 16;
     final postR = g.goalRight + 16;
-    final hitsPost = ((end.x - postL).abs() < r + 14 || (end.x - postR).abs() < r + 14) &&
+    final hitsPost =
+        ((end.x - postL).abs() < r + 14 || (end.x - postR).abs() < r + 14) &&
         end.y > g.crossbarY - r - 20;
-    final hitsBar = (end.y - g.crossbarY + 14).abs() < r + 14 && end.x > postL && end.x < postR;
+    final hitsBar =
+        (end.y - g.crossbarY + 14).abs() < r + 14 &&
+        end.x > postL &&
+        end.x < postR;
     if (hitsPost || hitsBar) {
       final inward = end.x < g.goalCenterX ? 1.0 : -1.0;
-      final toX = hitsBar ? end.x + rng.nextDouble() * 40 - 20 : end.x + inward * (r + 30);
+      final toX = hitsBar
+          ? end.x + rng.nextDouble() * 40 - 20
+          : end.x + inward * (r + 30);
       ball.drop(end, Vector2(toX, g.groundY - r));
       return;
     }
 
-    final inMouth = end.x > g.goalLeft && end.x < g.goalRight && end.y + r > g.crossbarY;
+    final inMouth =
+        end.x > g.goalLeft && end.x < g.goalRight && end.y + r > g.crossbarY;
     if (!inMouth) {
       // Auta / üstten: top görüş dışına gider.
       _pendingHit = false;
       final velocity = ball.flightVelocity;
-      ball.flyOut(velocity.length2 > 0 ? velocity.normalized() : Vector2(0, -1));
+      ball.flyOut(
+        velocity.length2 > 0 ? velocity.normalized() : Vector2(0, -1),
+      );
       return;
     }
-    _pendingHit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.55;
-    if (_pendingHit) scene.add(NetRipple(target.position.clone(), stage.accent));
+    _pendingHit =
+        target.visible &&
+        end.distanceTo(target.position) < target.radius + r * 0.55;
+    if (_pendingHit) {
+      scene.add(NetRipple(target.position.clone(), stage.accent));
+    }
     final rNet = kBallDiameter / 2 * g.ballGoalScale * 0.85;
-    ball.settleInNet(end, Vector2(end.x, g.groundY + 18 - rNet), g.ballGoalScale * 0.85);
+    ball.settleInNet(
+      end,
+      Vector2(end.x, g.groundY + 18 - rNet),
+      g.ballGoalScale * 0.85,
+    );
   }
 
   /// Direkten/kaleciden düşen top yere geldi.
   void resolveDrop(Vector2 end, double r) {
-    final hit = target.visible && end.distanceTo(target.position) < target.radius + r * 0.6;
+    final hit =
+        target.visible &&
+        end.distanceTo(target.position) < target.radius + r * 0.6;
     scene.add(RestingBall(end.clone(), r * 2 / kBallDiameter));
     schedule(0.45, () => hit ? _hit(end, r) : _miss(end, r));
     _scheduleNextBall(0.6);
@@ -328,7 +376,9 @@ class SutVeGolGame extends FlameGame {
     stage = next;
     view = kWide;
     background.crossfadeTo(view.bgKey(stage));
-    scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
+    scene.children.whereType<RestingBall>().toList().forEach(
+      (b) => b.removeFromParent(),
+    );
     target.spawn(immediate: true);
     scene.add(StageBanner(next));
     Sfx.stageUp();
@@ -341,17 +391,22 @@ class SutVeGolGame extends FlameGame {
   void _hit(Vector2 end, double r) {
     final gain = fever ? 60 : 30;
     score += gain;
+    runHits++;
+    if (fever) runFeverHits++;
     streak++;
+    runMaxStreak = max(runMaxStreak, streak);
     if (score > best) {
       best = score;
       _prefs?.setInt('best', best);
     }
     scoreboard.flashScore();
-    scene.add(ScorePopup(
-      target.position.clone(),
-      '+$gain',
-      color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
-    ));
+    scene.add(
+      ScorePopup(
+        target.position.clone(),
+        '+$gain',
+        color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
+      ),
+    );
     target.shrinkAway();
     if (fever) {
       Sfx.feverHit();
@@ -368,6 +423,7 @@ class SutVeGolGame extends FlameGame {
   }
 
   void _miss(Vector2 end, double r) {
+    runMisses++;
     streak = 0;
     lives = max(0, lives - 1);
     scoreboard.flashHeart();
@@ -380,6 +436,7 @@ class SutVeGolGame extends FlameGame {
         state = GameState.gameOver;
         Sfx.gameOver();
         overlays.add(kGameOverOverlay);
+        onRunFinished?.call(runSummary);
       });
       return;
     }
@@ -411,7 +468,9 @@ class SutVeGolGame extends FlameGame {
   void switchView(ViewGeom next) {
     view = next;
     background.crossfadeTo(next.bgKey(stage));
-    scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
+    scene.children.whereType<RestingBall>().toList().forEach(
+      (b) => b.removeFromParent(),
+    );
     target.spawn(immediate: true);
   }
 
@@ -420,7 +479,11 @@ class SutVeGolGame extends FlameGame {
   GameState? _stateBeforePause;
 
   void pause() {
-    if (state == GameState.splash || state == GameState.paused || state == GameState.gameOver) return;
+    if (state == GameState.splash ||
+        state == GameState.paused ||
+        state == GameState.gameOver) {
+      return;
+    }
     input.cancelGesture();
     _stateBeforePause = state;
     state = GameState.paused;
@@ -434,6 +497,8 @@ class SutVeGolGame extends FlameGame {
   }
 
   void restart() {
+    final completed = state == GameState.gameOver;
+    if (!completed && runShots > 0) onRunFinished?.call(runSummary);
     input.cancelGesture();
     _queue.clear();
     overlays.remove(kGameOverOverlay);
@@ -442,9 +507,13 @@ class SutVeGolGame extends FlameGame {
     lives = 3;
     streak = 0;
     fever = false;
+    _resetRunStats();
+    onRunStarted?.call();
     _pendingStage = null;
     Sfx.stopFeverLoop();
-    scene.children.whereType<RestingBall>().toList().forEach((b) => b.removeFromParent());
+    scene.children.whereType<RestingBall>().toList().forEach(
+      (b) => b.removeFromParent(),
+    );
     for (final k in keepers) {
       k.deactivate();
     }
@@ -470,6 +539,43 @@ class SutVeGolGame extends FlameGame {
 
   /// Sol üst çıkış butonu — Flutter tarafı bağlar.
   void Function()? onExit;
+  void Function()? onRunStarted;
+  void Function(GameRunSummary summary)? onRunFinished;
+
+  void _resetRunStats() {
+    runShots = 0;
+    runHits = 0;
+    runMisses = 0;
+    runFeverHits = 0;
+    runMaxStreak = 0;
+    _runStartedAt = DateTime.now();
+  }
+
+  GameRunSummary get runSummary => GameRunSummary(
+    score: score,
+    shots: runShots,
+    hits: runHits,
+    misses: runMisses,
+    feverHits: runFeverHits,
+    maxStreak: runMaxStreak,
+    durationMs: DateTime.now().difference(_runStartedAt).inMilliseconds,
+    stage: stage.name,
+  );
+}
+
+class GameRunSummary {
+  const GameRunSummary({
+    required this.score,
+    required this.shots,
+    required this.hits,
+    required this.misses,
+    required this.feverHits,
+    required this.maxStreak,
+    required this.durationMs,
+    required this.stage,
+  });
+  final int score, shots, hits, misses, feverHits, maxStreak, durationMs;
+  final String stage;
 }
 
 /// Saha, kale, top, HUD — hepsi bu kökün altında; splash'ta aşağıdan kayar.

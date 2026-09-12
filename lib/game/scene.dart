@@ -223,8 +223,12 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
         final r0 = kBallDiameter / 2 * _startScale;
         final gStartY = _start.y + r0; // yerle temas noktası
         final gEndY = g.groundY;
-        final gx = u * u * _start.x + 2 * u * sProg * _ctrl.x + sProg * sProg * _xEnd;
-        final ctrlGy = u * u * gStartY + 2 * u * sProg * (_ctrl.y + r0) + sProg * sProg * gEndY;
+        final gx =
+            u * u * _start.x + 2 * u * sProg * _ctrl.x + sProg * sProg * _xEnd;
+        final ctrlGy =
+            u * u * gStartY +
+            2 * u * sProg * (_ctrl.y + r0) +
+            sProg * sProg * gEndY;
         _groundY = ctrlGy;
         // Boyut, uzaklığa bağlı perspektif ölçeğini izler.
         scale = Vector2.all(sc);
@@ -264,7 +268,10 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
       case BallPhase.out:
         _t += dt;
         final k = (_t / 0.3).clamp(0.0, 1.0);
-        position = Vector2(_lerp(_dropFrom.x, _dropTo.x, k), _lerp(_dropFrom.y, _dropTo.y, k));
+        position = Vector2(
+          _lerp(_dropFrom.x, _dropTo.x, k),
+          _lerp(_dropFrom.y, _dropTo.y, k),
+        );
         scale = Vector2.all(_lerp(_outScale, _outScale * 0.6, k));
         _groundY = position.y + 200;
         _height = 200;
@@ -310,7 +317,11 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
     final shadowH = kBallDiameter * s * (0.30 - 0.10 * hN);
     final shadowAlpha = 0.42 - 0.24 * hN;
     canvas.drawOval(
-      Rect.fromCenter(center: Offset(radius * 0.10, shadowDy), width: shadowW, height: shadowH),
+      Rect.fromCenter(
+        center: Offset(radius * 0.10, shadowDy),
+        width: shadowW,
+        height: shadowH,
+      ),
       Paint()
         ..color = Color.fromRGBO(0, 0, 0, shadowAlpha)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 10 * hN),
@@ -431,7 +442,13 @@ class TargetComp extends PositionComponent with HasGameReference<SutVeGolGame> {
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
     for (var i = 0; i < 4; i++) {
-      canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: r), i * pi / 2, 0.6, false, dash);
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: r),
+        i * pi / 2,
+        0.6,
+        false,
+        dash,
+      );
     }
     canvas.restore();
   }
@@ -504,7 +521,14 @@ class Keeper extends PositionComponent with HasGameReference<SutVeGolGame> {
     );
     final h = keeperH * s;
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(cx - keeperW * s, g.railY - h * k - 2, keeperW * 2 * s, h * k + 4));
+    canvas.clipRect(
+      Rect.fromLTWH(
+        cx - keeperW * s,
+        g.railY - h * k - 2,
+        keeperW * 2 * s,
+        h * k + 4,
+      ),
+    );
     canvas.translate(cx, g.railY + 2);
     SceneArt.paintKeeper(canvas, keeperW * s, h, 1);
     canvas.restore();
@@ -512,9 +536,10 @@ class Keeper extends PositionComponent with HasGameReference<SutVeGolGame> {
 }
 
 /// Kale çizgisinde kalan küçük top.
-class RestingBall extends PositionComponent with HasGameReference<SutVeGolGame> {
+class RestingBall extends PositionComponent
+    with HasGameReference<SutVeGolGame> {
   RestingBall(Vector2 pos, double s)
-      : super(position: pos, anchor: Anchor.center, priority: 5) {
+    : super(position: pos, anchor: Anchor.center, priority: 5) {
     scale = Vector2.all(s);
     size = Vector2.all(kBallDiameter);
   }
@@ -524,7 +549,10 @@ class RestingBall extends PositionComponent with HasGameReference<SutVeGolGame> 
   @override
   Future<void> onLoad() async {
     _sprite = Sprite(game.images.fromCache('ball'));
-    final others = parent!.children.whereType<RestingBall>().where((b) => b != this).toList();
+    final others = parent!.children
+        .whereType<RestingBall>()
+        .where((b) => b != this)
+        .toList();
     if (others.length >= 4) others.first.removeFromParent();
   }
 
@@ -544,7 +572,8 @@ class RestingBall extends PositionComponent with HasGameReference<SutVeGolGame> 
 
 /// File dalgası: isabet noktasında büyüyen şeffaf halkalar.
 class NetRipple extends PositionComponent {
-  NetRipple(Vector2 pos, [this.color = const Color(0xFFFFFFFF)]) : super(position: pos, priority: 12);
+  NetRipple(Vector2 pos, [this.color = const Color(0xFFFFFFFF)])
+    : super(position: pos, priority: 12);
   final Color color;
   double _t = 0;
   static const double dur = 0.5;
@@ -577,7 +606,7 @@ class NetRipple extends PositionComponent {
 /// "+30" / "+60" yazısı: vuruş noktasından yukarı süzülür, söner.
 class ScorePopup extends PositionComponent {
   ScorePopup(Vector2 pos, this.text, {this.color = const Color(0xFFFFFFFF)})
-      : super(position: pos, priority: 14);
+    : super(position: pos, priority: 14);
   final String text;
   final Color color;
   double _t = 0;
@@ -595,7 +624,12 @@ class ScorePopup extends PositionComponent {
     final dy = -90 * _easeOut(k);
     final a = k < 0.6 ? 1.0 : 1 - (k - 0.6) / 0.4;
     final p = Vector2(0, dy);
-    for (final o in const [Offset(-2, 0), Offset(2, 0), Offset(0, -2), Offset(0, 2)]) {
+    for (final o in const [
+      Offset(-2, 0),
+      Offset(2, 0),
+      Offset(0, -2),
+      Offset(0, 2),
+    ]) {
       TextPaint(
         style: TextStyle(
           fontSize: 38,

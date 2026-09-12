@@ -69,7 +69,10 @@ class Sfx {
   static Future<void> startFeverLoop() async {
     if (skipInit || !enabled || _feverLoop != null) return;
     try {
-      _feverLoop = await FlameAudio.loopLongAudio('king_loop.wav', volume: 0.35);
+      _feverLoop = await FlameAudio.loopLongAudio(
+        'king_loop.wav',
+        volume: 0.35,
+      );
     } catch (_) {}
   }
 
@@ -96,7 +99,9 @@ class Sfx {
     if (skipInit || !enabled) return;
     try {
       // Bir sonraki karede çal: dokunma/karar karesini bloklamasın.
-      Future<void>.microtask(() => FlameAudio.play('$name.wav', volume: volume));
+      Future<void>.microtask(
+        () => FlameAudio.play('$name.wav', volume: volume),
+      );
     } catch (_) {}
   }
 
