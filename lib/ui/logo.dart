@@ -2,6 +2,17 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart';
+
+ui.Image? _brandIcon;
+
+Future<void> loadBrandIdentity() async {
+  final data = await rootBundle.load(
+    'assets/branding/sut-ve-gol-icon-master.png',
+  );
+  final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+  _brandIcon = (await codec.getNextFrame()).image;
+}
 
 /// Uygulama ikonu ile aynı S biçimli şut yolu, top ve kale amblemi.
 void paintLogo(
@@ -20,69 +31,19 @@ void paintLogo(
     Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k),
   );
   canvas.translate(r.left, r.top + (1 - k) * 20);
-  canvas.save();
-  canvas.translate(-w * 0.02, h * 0.05);
-  canvas.scale(w * 0.46 / 1024);
-  final shot = Path()
-    ..moveTo(150, 780)
-    ..cubicTo(400, 728, 570, 670, 615, 560)
-    ..cubicTo(650, 475, 555, 420, 410, 430)
-    ..cubicTo(245, 440, 205, 345, 300, 285)
-    ..cubicTo(420, 208, 575, 230, 690, 285)
-    ..cubicTo(545, 255, 400, 270, 355, 330)
-    ..cubicTo(325, 370, 390, 392, 500, 385)
-    ..cubicTo(700, 372, 790, 500, 720, 635)
-    ..cubicTo(635, 800, 385, 840, 150, 780)
-    ..close();
-  canvas.drawPath(
-    shot,
-    Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFFFF6418), Color(0xFFFFB52E)],
-      ).createShader(const Rect.fromLTWH(140, 200, 650, 650)),
-  );
-  final goal = Path()
-    ..moveTo(650, 220)
-    ..lineTo(900, 175)
-    ..lineTo(920, 455)
-    ..lineTo(760, 390)
-    ..moveTo(730, 205)
-    ..lineTo(770, 395)
-    ..moveTo(810, 190)
-    ..lineTo(845, 425)
-    ..moveTo(675, 285)
-    ..lineTo(907, 300)
-    ..moveTo(710, 345)
-    ..lineTo(914, 385);
-  canvas.drawPath(
-    goal,
-    Paint()
-      ..color = const Color(0xFFFFB52E)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 22
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round,
-  );
-  canvas.drawCircle(
-    const Offset(690, 325),
-    70,
-    Paint()..color = const Color(0xFFF5F7FF),
-  );
-  canvas.drawPath(
-    Path()
-      ..moveTo(690, 290)
-      ..lineTo(725, 316)
-      ..lineTo(712, 357)
-      ..lineTo(668, 357)
-      ..lineTo(655, 316)
-      ..close(),
-    Paint()..color = const Color(0xFF101D3D),
-  );
-  canvas.restore();
+  if (_brandIcon case final icon?) {
+    final size = h * .86;
+    canvas.drawImageRect(
+      icon,
+      ui.Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
+      ui.Rect.fromLTWH(w * .015, h * .03, size, size),
+      Paint()..filterQuality = FilterQuality.high,
+    );
+  }
   final line1 = _text('ŞUT VE', w * .145, FontWeight.w700, spacing: 0);
   final line2 = _text('GOL', w * .195, FontWeight.w700, spacing: w * .009);
   line1.paint(canvas, Offset(w * .68, h * .32), const Color(0xFFF5F7FF));
-  line2.paint(canvas, Offset(w * .68, h * .67), const Color(0xFFFF852D));
+  line2.paint(canvas, Offset(w * .68, h * .67), const Color(0xFFFF6B18));
   if (subtitle) {
     _text(
       'HER ŞUT BİR ŞANS.',

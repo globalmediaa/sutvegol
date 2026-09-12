@@ -10,6 +10,7 @@ import 'ui/auth_screen.dart';
 import 'ui/game_over_overlay.dart';
 import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
+import 'ui/logo.dart';
 import 'ui/mock_data.dart';
 import 'ui/pause_overlay.dart';
 import 'ui/profile_dialog.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  await loadBrandIdentity();
   await AuthService.instance.initialize();
   runApp(const SutVeGolApp());
 }
