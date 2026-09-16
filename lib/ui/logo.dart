@@ -4,47 +4,17 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
-ui.Image? _brandIcon;
 ui.Image? _brandMark;
 
 Future<void> loadBrandIdentity() async {
-  _brandIcon = await _loadImage('assets/branding/sut-ve-gol-icon-master.png');
-  _brandMark = await _loadImage(
+  final data = await rootBundle.load(
     'assets/branding/sut-ve-gol-mark-transparent.png',
   );
-}
-
-Future<ui.Image> _loadImage(String asset) async {
-  final data = await rootBundle.load(asset);
   final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-  return (await codec.getNextFrame()).image;
+  _brandMark = (await codec.getNextFrame()).image;
 }
 
-/// Uygulama ikonunu kırpmadan, verilen kare alana birebir çizer.
-void paintBrandIcon(
-  ui.Canvas canvas,
-  ui.Rect box, {
-  double alpha = 1,
-  double reveal = 1,
-}) {
-  final icon = _brandIcon;
-  if (icon == null) return;
-  final k = reveal.clamp(0.0, 1.0);
-  canvas.saveLayer(
-    box,
-    Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k),
-  );
-  canvas.translate(0, (1 - k) * 20);
-  canvas.drawImageRect(
-    icon,
-    ui.Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
-    box,
-    Paint()..filterQuality = FilterQuality.high,
-  );
-  canvas.restore();
-}
-
-/// Splash gibi zeminli yüzeylerde kare arka plan olmadan marka sembolünü çizer.
+/// Uygulama ikonuyla aynı amblemi (dış zemini şeffaf) verilen kare alana çizer.
 void paintBrandMark(
   ui.Canvas canvas,
   ui.Rect box, {
@@ -85,15 +55,7 @@ void paintLogo(
     Paint()..color = Color.fromRGBO(255, 255, 255, alpha * k),
   );
   canvas.translate(r.left, r.top + (1 - k) * 20);
-  if (_brandIcon case final icon?) {
-    final size = h * .86;
-    canvas.drawImageRect(
-      icon,
-      ui.Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
-      ui.Rect.fromLTWH(w * .015, h * .03, size, size),
-      Paint()..filterQuality = FilterQuality.high,
-    );
-  }
+  paintBrandMark(canvas, ui.Rect.fromLTWH(w * .015, h * .03, h * .86, h * .86));
   final line1 = _text('ŞUT VE', w * .145, FontWeight.w700, spacing: 0);
   final line2 = _text('GOL', w * .195, FontWeight.w700, spacing: w * .009);
   line1.paint(canvas, Offset(w * .68, h * .32), const Color(0xFFF5F7FF));

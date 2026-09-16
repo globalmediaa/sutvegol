@@ -38,7 +38,8 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - Tümü sentez: `python3 tools/make_audio.py` → `assets/audio/` (22.05 kHz mono). Vuruş, isabet çanı, iskalama, yuvarlanma, Kral Modu başla/isabet/bitiş + alev döngüsü, oyun bitti, sayaç, açılış, sahne fanfarı, 4 ambiyans (sokak trafiği / sahil dalgası + martı / gece halı saha / tribün).
 
 ## Kimlik
-- Uygulama adı: **Şut ve Gol**. Paket `sut_ve_gol`, iOS bundle `com.globalmedia.sutVeGol`, Android `com.globalmedia.sut_ve_gol`. İkonlar: lacivert zemin, taç + top (PIL ile üretildi).
+- Uygulama adı: **Şut ve Gol**. Paket `sut_ve_gol`, iOS bundle `com.globalmedia.sutVeGol`, Android `com.globalmedia.sut_ve_gol`.
+- Marka kaynağı `assets/brand/app-icon.png` (S şut yolu + top + kale, lacivert zemin). `python3 tools/make_brand.py` → dış zemini şeffaf amblem (`assets/branding/sut-ve-gol-mark-transparent.png`; splash ve `LogoWidget` bunu çizer), iOS/Android ikon setleri, iOS `LaunchImage` (amblem + ŞUT VE / GOL).
 - Klasör adı hâlâ `kick-legend` (yerel yol; istenirse ayrıca taşınır).
 
 ## Test / dağıtım
