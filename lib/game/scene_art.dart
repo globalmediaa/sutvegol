@@ -17,10 +17,15 @@ class SceneArt {
 
   // ------------------------------------------------------------- görseller
 
-  static Future<ui.Image> background(Stage stage, ViewGeom g) {
+  /// [hud] kapalıyken tabela ve duraklat düğmesi çizilmez (menü zemini).
+  static Future<ui.Image> background(
+    Stage stage,
+    ViewGeom g, {
+    bool hud = true,
+  }) {
     final rec = ui.PictureRecorder();
     final c = Canvas(rec);
-    _paintScene(c, stage, g);
+    _paintScene(c, stage, g, hud: hud);
     return rec.endRecording().toImage(kWorldW.toInt(), kWorldH.toInt());
   }
 
@@ -376,7 +381,12 @@ class SceneArt {
 
   // ------------------------------------------------------------- sahne
 
-  static void _paintScene(Canvas c, Stage stage, ViewGeom g) {
+  static void _paintScene(
+    Canvas c,
+    Stage stage,
+    ViewGeom g, {
+    bool hud = true,
+  }) {
     final rng = Random(stage.index * 97 + 5);
     _sky(c, stage, rng);
     c.save();
@@ -396,6 +406,7 @@ class SceneArt {
     c.restore();
     _ground(c, stage, g, rng);
     _goal(c, stage, g);
+    if (!hud) return;
     _board(c, stage, g);
     _pauseButton(c);
   }

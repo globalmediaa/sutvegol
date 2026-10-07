@@ -1,0 +1,5 @@
+// Google ile giriş (iOS): Google Cloud'daki iOS OAuth istemcisinin
+// "iOS URL scheme" değeri, örn. com.googleusercontent.apps.1234567890-abc.
+// Aynı istemcinin kimliği derlemede --dart-define=GOOGLE_IOS_CLIENT_ID ile verilir.
+// Değer girilene kadar uygulamanın kendi şeması kullanılır (zararsız).
+GOOGLE_REVERSED_CLIENT_ID=sutvegol

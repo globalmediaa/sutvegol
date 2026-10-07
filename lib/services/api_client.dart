@@ -89,24 +89,24 @@ class ApiClient {
     late http.Response response;
     try {
       final uri = Uri.parse('$apiBaseUrl$path');
-      response = switch (method) {
-        'POST' => await http.post(
+      response = await (switch (method) {
+        'POST' => http.post(
           uri,
           headers: headers,
           body: jsonEncode(data ?? {}),
         ),
-        'PUT' => await http.put(
+        'PUT' => http.put(
           uri,
           headers: headers,
           body: jsonEncode(data ?? {}),
         ),
-        'DELETE' => await http.delete(
+        'DELETE' => http.delete(
           uri,
           headers: headers,
           body: jsonEncode(data ?? {}),
         ),
-        _ => await http.get(uri, headers: headers),
-      };
+        _ => http.get(uri, headers: headers),
+      }).timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const ApiException(
         'network',

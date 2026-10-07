@@ -1,7 +1,10 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../game/geometry.dart';
+import '../game/scene_art.dart';
 import 'logo.dart';
 import 'theme.dart';
 
@@ -13,7 +16,7 @@ class DimBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Positioned.fill(
     child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+      filter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
       child: ColoredBox(color: FK.navy.withValues(alpha: alpha)),
     ),
   );
@@ -65,6 +68,7 @@ class PillButton extends StatelessWidget {
     this.height = 56,
     this.width,
     this.fontSize = 18,
+    this.enabled = true,
   });
   final String label;
   final VoidCallback onTap;
@@ -74,10 +78,14 @@ class PillButton extends StatelessWidget {
   final double? width;
   final double fontSize;
 
+  /// Kapalıyken soluk görünür ve dokunmaya yanıt vermez.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
+    onTap: enabled ? onTap : null,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       height: height,
       width: width,
       padding: EdgeInsets.symmetric(horizontal: height * 0.3),
@@ -86,8 +94,14 @@ class PillButton extends StatelessWidget {
         color: primary ? null : FK.glass,
         borderRadius: BorderRadius.circular(height / 2),
         border: primary ? null : Border.all(color: FK.glassBorder, width: 1.2),
-        boxShadow: primary ? FK.glow(height * 0.4) : null,
+        boxShadow: primary && enabled ? FK.glow(height * 0.4) : null,
       ),
+      foregroundDecoration: enabled
+          ? null
+          : BoxDecoration(
+              color: FK.navy.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(height / 2),
+            ),
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Row(
@@ -361,4 +375,371 @@ class ToggleRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Birincil hap butonun "işlem sürüyor" hâli (aynı boyut, dönen halka).
+class BusyPill extends StatelessWidget {
+  const BusyPill({super.key, this.height = 56});
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: height,
+    decoration: BoxDecoration(
+      gradient: FK.fire,
+      borderRadius: BorderRadius.circular(height / 2),
+    ),
+    alignment: Alignment.center,
+    child: SizedBox(
+      width: height * 0.4,
+      height: height * 0.4,
+      child: const CircularProgressIndicator(
+        strokeWidth: 2.5,
+        color: Colors.white,
+      ),
+    ),
+  );
+}
+
+/// Marka başlığı: logonun arkasında yumuşak turuncu parıltı.
+class BrandHeader extends StatelessWidget {
+  const BrandHeader({super.key, this.width = 240});
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    alignment: Alignment.center,
+    children: [
+      Container(
+        width: width * 0.9,
+        height: width * 0.5,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: FK.orange.withValues(alpha: 0.28),
+              blurRadius: width * 0.3,
+              spreadRadius: width * 0.02,
+            ),
+          ],
+        ),
+      ),
+      LogoWidget(width: width, subtitle: false),
+    ],
+  );
+}
+
+/// Beyaz "… ile devam et" butonu (Apple / Google).
+class SocialButton extends StatelessWidget {
+  const SocialButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.enabled = true,
+  });
+  final String label;
+  final Widget icon;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: enabled ? onTap : null,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: enabled ? 1 : 0.55,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: 26, height: 26, child: Center(child: icon)),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: FK.t(
+                  size: 16,
+                  w: FontWeight.w700,
+                  color: FK.navy,
+                  spacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Koddan çizilen çok renkli "G" işareti (dosya yok).
+class GoogleMark extends StatelessWidget {
+  const GoogleMark({super.key, this.size = 22});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(size: Size.square(size), painter: _GooglePainter());
+}
+
+class _GooglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final c = Offset(r, r);
+    final stroke = r * 0.42;
+    final rect = Rect.fromCircle(center: c, radius: r - stroke / 2);
+    Paint p(Color col) => Paint()
+      ..color = col
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke;
+    const d = math.pi / 180;
+    // Saat yönü: 0° sağ, 90° alt, 180° sol, 270° üst.
+    canvas.drawArc(rect, 200 * d, 115 * d, false, p(const Color(0xFFEA4335)));
+    canvas.drawArc(rect, 135 * d, 65 * d, false, p(const Color(0xFFFBBC05)));
+    canvas.drawArc(rect, 45 * d, 90 * d, false, p(const Color(0xFF34A853)));
+    canvas.drawArc(rect, 0, 45 * d, false, p(const Color(0xFF4285F4)));
+    canvas.drawRect(
+      Rect.fromLTRB(c.dx, c.dy - stroke / 2, r * 2, c.dy + stroke / 2),
+      Paint()..color = const Color(0xFF4285F4),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+/// İki (ya da daha çok) seçenekli hap anahtar; seçili dilim turuncu kayar.
+class SegmentedPill extends StatelessWidget {
+  const SegmentedPill({
+    super.key,
+    required this.labels,
+    required this.index,
+    required this.onChanged,
+  });
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 44,
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: FK.navy.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(23),
+      border: Border.all(color: FK.glassBorder, width: 1.2),
+    ),
+    child: LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth / labels.length;
+        return Stack(
+          children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              left: w * index,
+              top: 0,
+              bottom: 0,
+              width: w,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: FK.fire,
+                  borderRadius: BorderRadius.circular(19),
+                  boxShadow: FK.glow(10, alpha: 0.35, dy: 3),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                for (var i = 0; i < labels.length; i++)
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onChanged == null ? null : () => onChanged!(i),
+                      child: Center(
+                        child: Text(
+                          labels[i],
+                          style: FK.t(
+                            size: 14,
+                            w: FontWeight.w700,
+                            color: i == index ? Colors.white : FK.muted,
+                            spacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// Giriş ekranı metin alanı: koyu cam zemin, yuvarlak kenar, turuncu odak.
+InputDecoration gameInput({
+  required String label,
+  IconData? icon,
+  String? helper,
+  TextStyle? helperStyle,
+  Widget? suffix,
+}) {
+  OutlineInputBorder border(Color color, [double width = 1.2]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: color, width: width),
+      );
+  return InputDecoration(
+    labelText: label,
+    labelStyle: FK.t(size: 15, color: FK.muted),
+    floatingLabelStyle: FK.t(size: 13, color: FK.amber),
+    helperText: helper,
+    helperStyle: helperStyle ?? FK.t(size: 12, color: FK.muted),
+    helperMaxLines: 2,
+    prefixIcon: icon == null ? null : Icon(icon, color: FK.muted, size: 22),
+    suffixIcon: suffix,
+    filled: true,
+    fillColor: FK.navy.withValues(alpha: 0.55),
+    border: border(FK.glassBorder),
+    enabledBorder: border(FK.glassBorder),
+    focusedBorder: border(FK.orange, 1.6),
+    errorBorder: border(FK.red),
+    focusedErrorBorder: border(FK.red, 1.6),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    counterText: '',
+  );
+}
+
+/// Oyunun prosedürel sahnesini bulanık, karartılmış ve yavaşça nefes alan bir
+/// zemin olarak çizer (giriş ekranları). Görsel sahne başına bir kez üretilir.
+class GameBackdrop extends StatefulWidget {
+  const GameBackdrop({super.key, this.stage = Stage.street, this.child});
+  final Stage stage;
+  final Widget? child;
+
+  @override
+  State<GameBackdrop> createState() => _GameBackdropState();
+}
+
+class _GameBackdropState extends State<GameBackdrop>
+    with SingleTickerProviderStateMixin {
+  static final Map<Stage, Future<ui.Image>> _cache = {};
+  late final AnimationController _breath;
+  ui.Image? _image;
+
+  @override
+  void initState() {
+    super.initState();
+    _breath = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 16),
+    )..repeat(reverse: true);
+    (_cache[widget.stage] ??= _render(widget.stage)).then((img) {
+      if (mounted) setState(() => _image = img);
+    });
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  /// Sahneyi çeyrek boyutta, bulanıklığı bir kez pişirilmiş olarak üretir;
+  /// böylece her karede BackdropFilter çalışmaz.
+  static Future<ui.Image> _render(Stage stage) async {
+    final sharp = await SceneArt.background(stage, kWide, hud: false);
+    const w = kWorldW / 4, h = kWorldH / 4;
+    final rec = ui.PictureRecorder();
+    Canvas(rec).drawImageRect(
+      sharp,
+      const Rect.fromLTWH(0, 0, kWorldW, kWorldH),
+      const Rect.fromLTWH(0, 0, w, h),
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        ..imageFilter = ui.ImageFilter.blur(
+          sigmaX: 4,
+          sigmaY: 4,
+          tileMode: TileMode.clamp,
+        ),
+    );
+    final blurred = await rec.endRecording().toImage(w.toInt(), h.toInt());
+    sharp.dispose();
+    return blurred;
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      const ColoredBox(color: FK.navy),
+      AnimatedOpacity(
+        duration: const Duration(milliseconds: 600),
+        opacity: _image == null ? 0 : 1,
+        child: _image == null
+            ? const SizedBox.shrink()
+            : AnimatedBuilder(
+                animation: _breath,
+                builder: (context, child) => Transform.scale(
+                  scale:
+                      1.04 +
+                      0.05 * Curves.easeInOut.transform(_breath.value),
+                  child: child,
+                ),
+                child: CustomPaint(painter: _CoverPainter(_image!)),
+              ),
+      ),
+      const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x730B1226), Color(0xA60B1226), Color(0xEB0B1226)],
+            stops: [0, 0.5, 1],
+          ),
+        ),
+      ),
+      if (widget.child != null) widget.child!,
+    ],
+  );
+}
+
+/// Görseli alanı kaplayacak biçimde (cover) çizer; üst-orta hizalı.
+class _CoverPainter extends CustomPainter {
+  _CoverPainter(this.image);
+  final ui.Image image;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final iw = image.width.toDouble(), ih = image.height.toDouble();
+    final scale = math.max(size.width / iw, size.height / ih);
+    final w = iw * scale, h = ih * scale;
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, iw, ih),
+      Rect.fromLTWH((size.width - w) / 2, (size.height - h) * 0.35, w, h),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CoverPainter old) => old.image != image;
 }

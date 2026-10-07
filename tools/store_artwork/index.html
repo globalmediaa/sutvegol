@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Şut ve Gol — App Store görselleri</title>
+<style>
+  @font-face { font-family: 'Titillium'; font-weight: 400; src: url('../../assets/fonts/TitilliumWeb-Regular.ttf'); }
+  @font-face { font-family: 'Titillium'; font-weight: 600; src: url('../../assets/fonts/TitilliumWeb-SemiBold.ttf'); }
+  @font-face { font-family: 'Titillium'; font-weight: 700; src: url('../../assets/fonts/TitilliumWeb-Bold.ttf'); }
+
+  :root {
+    --navy: #0B1226; --navy2: #141F45; --navy3: #1E2C63;
+    --orange: #FF7A1A; --amber: #FFB13B; --gold: #FFC53D;
+    --text: #F5F7FF; --muted: #AEB8D8;
+    /* Yerleşim ölçüleri; gövde sınıfına göre değişir. */
+    --W: 3840px; --H: 1646px;
+    --mark: 520px; --word: 250px; --tag: 112px; --sub: 54px; --chip: 40px;
+    --phone: 1480px; --phone-bottom: -170px; --phone-right: 150px;
+    --brand-left: 230px; --brand-top: 50%;
+  }
+  body.search {
+    --H: 2560px;
+    --mark: 640px; --word: 300px; --tag: 136px; --sub: 64px; --chip: 46px;
+    --phone: 1660px; --phone-bottom: -190px; --phone-right: 200px;
+    --brand-left: 260px; --brand-top: 47%;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: var(--W); height: var(--H); overflow: hidden; background: var(--navy); }
+  body { font-family: 'Titillium', 'Helvetica Neue', Arial, sans-serif; color: var(--text); }
+
+  .stage { position: relative; width: var(--W); height: var(--H); overflow: hidden;
+    background:
+      radial-gradient(ellipse 60% 70% at 72% 110%, rgba(255,122,26,.42), transparent 62%),
+      radial-gradient(ellipse 45% 60% at 18% 100%, rgba(255,92,138,.22), transparent 60%),
+      radial-gradient(ellipse 70% 55% at 50% -10%, #2B1E5C, transparent 65%),
+      linear-gradient(180deg, #060A1C 0%, #10183A 48%, #1B1F55 100%);
+  }
+  /* Stadyum ışık huzmeleri */
+  .rays { position: absolute; inset: 0;
+    background:
+      linear-gradient(112deg, transparent 38%, rgba(255,177,59,.10) 44%, transparent 49%),
+      linear-gradient(68deg, transparent 54%, rgba(255,177,59,.08) 60%, transparent 66%),
+      linear-gradient(100deg, transparent 10%, rgba(53,213,242,.07) 15%, transparent 21%);
+    mix-blend-mode: screen; }
+  /* Yıldızlar / tribün kıvılcımları */
+  .dots { position: absolute; inset: 0; opacity: .55;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,.9) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(255,197,61,.8) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(255,255,255,.6) 0 1.5px, transparent 2.5px);
+    background-size: 530px 410px, 770px 620px, 350px 290px;
+    background-position: 40px 30px, 200px 120px, 90px 70px;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,.5) 45%, transparent 75%); }
+  /* Zemin: saha çizgisi hissi */
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 24%;
+    background: linear-gradient(180deg, transparent, rgba(6,10,28,.75));
+  }
+  .vignette { position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 90% at 50% 50%, transparent 55%, rgba(6,10,28,.55) 100%); }
+
+  /* Marka bloğu */
+  .brand { position: absolute; left: var(--brand-left); top: var(--brand-top); transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0; z-index: 3; }
+  .mark { width: var(--mark); height: var(--mark); object-fit: contain;
+    filter: drop-shadow(0 30px 60px rgba(255,122,26,.35)) drop-shadow(0 10px 20px rgba(0,0,0,.5)); margin-left: -4%; margin-bottom: -2%; }
+  .word { display: flex; align-items: baseline; gap: .18em; font-weight: 700; font-size: var(--word); line-height: .95; letter-spacing: .01em;
+    text-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  .word .ve { font-size: .42em; font-weight: 600; color: var(--amber); font-style: italic; letter-spacing: .04em; margin: 0 .05em; }
+  .word .gol { color: var(--orange); }
+  .tag { margin-top: .35em; font-size: var(--tag); font-weight: 700; line-height: 1.05; letter-spacing: -.005em; color: var(--text);
+    text-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .tag em { font-style: normal; color: var(--gold); }
+  .sub { margin-top: .5em; font-size: var(--sub); font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .chips { margin-top: 1.0em; display: flex; gap: .55em; }
+  .chip { font-size: var(--chip); font-weight: 700; letter-spacing: .14em; padding: .45em .9em; border-radius: 999px;
+    border: 3px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: var(--text); backdrop-filter: blur(6px); }
+  .chip.hot { border-color: transparent; background: linear-gradient(135deg, var(--orange), var(--amber)); color: #fff;
+    box-shadow: 0 14px 34px rgba(255,122,26,.45); }
+
+  /* Telefonlar */
+  .phones { position: absolute; right: var(--phone-right); bottom: var(--phone-bottom); height: var(--phone); z-index: 2;
+    display: flex; align-items: flex-end; }
+  .phone { position: relative; height: 100%; aspect-ratio: 1320 / 2868; border-radius: 9.5% / 4.4%;
+    background: #0a0f24; padding: 1.6%; box-shadow: 0 60px 120px rgba(0,0,0,.6), 0 0 0 3px rgba(255,255,255,.08), 0 0 90px rgba(255,122,26,.18);
+    transform-origin: 50% 100%; }
+  .phone .screen { position: relative; width: 100%; height: 100%; border-radius: 8% / 3.7%; overflow: hidden; background: #000; }
+  .phone img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .phone .glare { position: absolute; inset: 0; background: linear-gradient(115deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 38%); pointer-events: none; }
+  .phone.side { height: 84%; opacity: .96; }
+  .phone.left { transform: rotate(-9deg) translate(10%, 3%); z-index: 1; }
+  .phone.right { transform: rotate(9deg) translate(-10%, 3%); z-index: 1; }
+  .phone.center { z-index: 3; box-shadow: 0 80px 140px rgba(0,0,0,.7), 0 0 0 3px rgba(255,255,255,.1), 0 0 140px rgba(255,122,26,.3); }
+
+  /* Kaydırma jesti: top → hedef */
+  .gesture { position: absolute; inset: 0; pointer-events: none; }
+  .gesture path { fill: none; stroke-linecap: round; }
+  .gesture .trail { stroke: rgba(255,255,255,.95); stroke-width: 14; stroke-dasharray: 2 34; filter: drop-shadow(0 0 12px rgba(255,177,59,.9)); }
+  .gesture .ring { fill: none; stroke: var(--gold); stroke-width: 10; }
+  .gesture .finger { fill: rgba(255,255,255,.95); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="rays"></div>
+  <div class="dots"></div>
+  <div class="ground"></div>
+  <div class="vignette"></div>
+
+  <div class="brand">
+    <img class="mark" src="../../assets/branding/sut-ve-gol-mark-transparent.png" alt="">
+    <div class="word"><span>ŞUT</span><span class="ve">ve</span><span class="gol">GOL</span></div>
+    <div class="tag">Her şut <em>bir şans.</em></div>
+    <div class="sub">Kaydır · Falso ver · Hedefi bul</div>
+    <div class="chips">
+      <span class="chip">SOKAK</span><span class="chip">SAHİL</span><span class="chip">HALI SAHA</span><span class="chip hot">STADYUM</span>
+    </div>
+  </div>
+
+  <div class="phones">
+    <div class="phone side left"><div class="screen"><img src="../../docs/assets/street.png" alt=""><div class="glare"></div></div></div>
+    <div class="phone center"><div class="screen"><img src="../../docs/assets/stadium.png" alt=""><div class="glare"></div>
+      <svg class="gesture" viewBox="0 0 1320 2868" preserveAspectRatio="none">
+        <path class="trail" d="M 665 2300 C 560 1900, 520 1650, 605 1430"/>
+        <circle class="ring" cx="605" cy="1430" r="70"/>
+        <circle class="finger" cx="665" cy="2300" r="34"/>
+      </svg>
+    </div></div>
+    <div class="phone side right"><div class="screen"><img src="../../docs/assets/cage.png" alt=""><div class="glare"></div></div></div>
+  </div>
+</div>
+<script>
+  const layout = new URLSearchParams(location.search).get('layout') || 'header';
+  document.body.classList.add(layout);
+</script>
+</body>
+</html>

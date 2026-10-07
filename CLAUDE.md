@@ -15,7 +15,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - `lib/game/led.dart` — 7-segment çizim; hem Flame hem Flutter tarafı kullanır.
 - `lib/game/splash.dart` — gece göğü + Yükleniyor → logo alev iziyle belirir, köz parçacıkları → sahaya pan.
 - `lib/game/sfx.dart` — flame_audio; sahneye göre ambiyans (`amb_<stage>.wav`), Kral Modu döngüsü, efektler.
-- `lib/ui/theme.dart` (`FK` paleti: lacivert + turuncu/amber), `logo.dart` (paintLogo/paintCrown — Flame ve Flutter ortak), `widgets.dart` (GlassCard, PillButton, RoundButton, AvatarCircle (isimden üretilen), ToggleRow, LogoWidget), `game_over_overlay.dart`, `pause_overlay.dart`, `leaderboard_screen.dart`, `profile_dialog.dart`, `loading_screen.dart`, `led_painter.dart`, `mock_data.dart` (yerel liste + 37 rozet).
+- `lib/ui/theme.dart` (`FK` paleti: lacivert + turuncu/amber), `logo.dart` (paintLogo/paintCrown — Flame ve Flutter ortak), `widgets.dart` (GlassCard, PillButton (`enabled`), BusyPill, BrandHeader, SocialButton + GoogleMark (koddan çizilen G), SegmentedPill, `gameInput` alan stili, GameBackdrop (bulanık prosedürel sahne zemini, `hud: false`), RoundButton, AvatarCircle (isimden üretilen), ToggleRow, LogoWidget), `auth_screen.dart` (sokak sahnesi önünde cam kart: Apple / Google / e-posta kayıt-giriş, misafir), `username_screen.dart` (sosyal girişten sonra takma ad), `game_over_overlay.dart`, `pause_overlay.dart`, `leaderboard_screen.dart`, `profile_dialog.dart`, `loading_screen.dart`, `led_painter.dart`, `mock_data.dart` (yerel liste + 37 rozet).
 - `assets/fonts/` Titillium Web (OFL). `assets/audio/` — `tools/make_audio.py` ile üretilir.
 
 ## Mekanik notları
@@ -29,6 +29,8 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - Leaderboard API üzerinden gerçek kullanıcıları ve doğrulanmış skorları gösterir. Avatarlar kullanıcı adından üretilir.
 
 ## Geliştirme bayrakları
+- `--dart-define=API_BASE_URL=https://api.alan.tld` → canlı sunucu (varsayılan example.com = yapılandırılmamış).
+- `--dart-define=GOOGLE_IOS_CLIENT_ID=…apps.googleusercontent.com` → iOS Google girişi (boşsa buton "yapılandırılmamış" hatası verir, çökmez). `--dart-define=GOOGLE_SERVER_CLIENT_ID=…` → Web istemcisi; Android'de idToken için şart. iOS geri dönüş şeması `ios/Flutter/Social.xcconfig` içindeki `GOOGLE_REVERSED_CLIENT_ID` (com.googleusercontent.apps.…). Sign in with Apple entitlement'ı `Runner.entitlements` içinde.
 - `--dart-define=AUTOPLAY=true` → oyun kendi kendine oynar.
 - `--dart-define=UI_PREVIEW=leaderboard|profile` → ekranı doğrudan açar.
 - `--dart-define=FEVER_TEST=true` → ilk toptan itibaren Kral Modu.
@@ -44,5 +46,8 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 
 ## Test / dağıtım
 - `flutter test` — swipe → şut widget testi.
-- Simülatör: `flutter build ios --simulator --debug` → `xcrun simctl install/launch`.
+- Simülatör: Xcode 27'de `flutter build ios --simulator` iki mimaride `lipo -verify_arch` hatası verir; tek mimari derle: `cd ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator -destination 'id=<UDID>' -derivedDataPath ../build/ios-sim ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build` → `xcrun simctl install booted build/ios-sim/Build/Products/Debug-iphonesimulator/Runner.app` → `xcrun simctl launch booted com.globalmedia.sutVeGol`.
 - Telefon: `flutter run -d 00008140-001059EA14D8801C --release` (Team Y2MWRALQHR).
+
+## Mağaza görselleri
+- `python3 tools/make_store_artwork.py` → `store/appstore/` içine App Store ürün sayfası başlığı (21:9, 3840×1646) ve arama sonucu (3:2, 3840×2560) görsellerini PNG+JPG, alfasız üretir. Kaynak `tools/store_artwork/index.html` (headless Chrome ile çizilir; logo, docs/assets sahne görüntüleri, Titillium).

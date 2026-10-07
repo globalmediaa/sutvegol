@@ -1,8 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'api_client.dart';
+
+/// Google OAuth istemci kimlikleri derleme anında verilir:
+/// `--dart-define=GOOGLE_IOS_CLIENT_ID=…apps.googleusercontent.com`
+/// `--dart-define=GOOGLE_SERVER_CLIENT_ID=…apps.googleusercontent.com` (Web
+/// istemcisi; Android'de idToken almak için gerekir).
+const googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
 
 class AppUser {
   const AppUser({
@@ -70,7 +80,20 @@ class AuthService extends ChangeNotifier {
 
   Future<void> google() async {
     await _run(() async {
-      final account = await GoogleSignIn(scopes: const ['email']).signIn();
+      final apple = !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+      if (apple && googleIosClientId.isEmpty) {
+        throw const ApiException(
+          'google_config',
+          'Google girişi bu derlemede yapılandırılmamış.',
+        );
+      }
+      final account = await GoogleSignIn(
+        scopes: const ['email'],
+        clientId: apple ? googleIosClientId : null,
+        serverClientId: googleServerClientId.isEmpty
+            ? null
+            : googleServerClientId,
+      ).signIn();
       if (account == null) return;
       final token = (await account.authentication).idToken;
       if (token == null) {
@@ -158,6 +181,22 @@ class AuthService extends ChangeNotifier {
       await action();
     } on ApiException catch (e) {
       error = e.message;
+      rethrow;
+    } on SignInWithAppleAuthorizationException catch (e) {
+      // Kullanıcı vazgeçtiyse sessiz kal.
+      if (e.code != AuthorizationErrorCode.canceled) {
+        error = 'Apple girişi tamamlanamadı.';
+      }
+      rethrow;
+    } on PlatformException catch (e) {
+      if (e.code != 'sign_in_canceled' && e.code != 'canceled') {
+        error = e.code == 'network_error'
+            ? 'Bağlantı kurulamadı. İnternetini kontrol et.'
+            : 'Giriş tamamlanamadı (${e.code}).';
+      }
+      rethrow;
+    } catch (_) {
+      error = 'Giriş tamamlanamadı. Tekrar dene.';
       rethrow;
     } finally {
       loading = false;
