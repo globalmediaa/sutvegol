@@ -22,11 +22,18 @@ class SceneArt {
     Stage stage,
     ViewGeom g, {
     bool hud = true,
+    Rect? region,
   }) {
     final rec = ui.PictureRecorder();
     final c = Canvas(rec);
+    final area = region ?? const Rect.fromLTWH(0, 0, kWorldW, kWorldH);
+    c.translate(-area.left, -area.top);
+    c.clipRect(area);
     _paintScene(c, stage, g, hud: hud);
-    return rec.endRecording().toImage(kWorldW.toInt(), kWorldH.toInt());
+    final picture = rec.endRecording();
+    return picture
+        .toImage(area.width.ceil(), area.height.ceil())
+        .whenComplete(picture.dispose);
   }
 
   /// Açılış göğü: üstte gece laciverti, altta sokak sahnesinin gök rengiyle birleşir.

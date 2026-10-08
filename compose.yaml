@@ -1,0 +1,51 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-12883}:80"
+    environment:
+      APP_URL: https://sutvegol.gmgaming.app
+      APP_KEY: ${APP_KEY:?APP_KEY is required}
+      DB_DSN: mysql:host=db;dbname=sutvegol;charset=utf8mb4
+      DB_USER: sutvegol
+      DB_PASS: ${DB_PASSWORD:?DB_PASSWORD is required}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      APPLE_CLIENT_ID: com.globalmedia.sutVeGol
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-Y2MWRALQHR}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_KEY_FILE: /run/secrets/apple_key.p8
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-info@globalmedia.com.tr}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 384m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: sutvegol
+      MYSQL_USER: sutvegol
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/database/migrations/20261008_duels.sql:/docker-entrypoint-initdb.d/02-duels.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -usutvegol --database=sutvegol -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  db_data:

@@ -21,6 +21,7 @@ class AppUser {
     this.username,
     this.displayName,
     this.avatarUrl,
+    this.providers = const [],
   });
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
     id: json['id'] as String,
@@ -28,12 +29,14 @@ class AppUser {
     username: json['username'] as String?,
     displayName: json['displayName'] as String?,
     avatarUrl: json['avatarUrl'] as String?,
+    providers: (json['providers'] as List? ?? const []).cast<String>(),
   );
   final String id;
   final String? email;
   final String? username;
   final String? displayName;
   final String? avatarUrl;
+  final List<String> providers;
   bool get needsUsername => username == null || username!.isEmpty;
 }
 
@@ -111,7 +114,9 @@ class AuthService extends ChangeNotifier {
 
   Future<void> apple() async {
     await _run(() async {
+      final challenge = await api.post('/v1/auth/apple/challenge', auth: false);
       final credential = await SignInWithApple.getAppleIDCredential(
+        nonce: challenge['nonce'] as String,
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
@@ -125,6 +130,7 @@ class AuthService extends ChangeNotifier {
           '/v1/auth/apple',
           data: {
             'identityToken': credential.identityToken,
+            'challengeId': challenge['challengeId'],
             'displayName': [
               credential.givenName,
               credential.familyName,
@@ -162,7 +168,17 @@ class AuthService extends ChangeNotifier {
 
   Future<void> deleteAccount() async {
     await _run(() async {
-      await api.delete('/v1/me');
+      Map<String, dynamic>? data;
+      if (user?.providers.contains('apple') == true) {
+        final credential = await SignInWithApple.getAppleIDCredential(
+          scopes: const [],
+        );
+        data = {
+          'identityToken': credential.identityToken,
+          'authorizationCode': credential.authorizationCode,
+        };
+      }
+      await api.delete('/v1/me', data: data);
       await api.clear();
       user = null;
     });

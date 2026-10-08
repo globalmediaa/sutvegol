@@ -1,0 +1,32 @@
+name: Deploy Şut ve Gol to Hetzner
+on:
+  push:
+    branches: [prod]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sutvegol-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    name: Deploy Docker behind host Nginx
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          fingerprint: ${{ secrets.HETZNER_FINGERPRINT }}
+          command_timeout: 18m
+          script: |
+            set -eu
+            cd ~/games/sutvegol
+            test -z "$(git status --porcelain --untracked-files=no)" || { echo 'Server has local changes; deployment stopped.' >&2; exit 1; }
+            git fetch origin prod
+            git switch prod
+            git pull --ff-only origin prod
+            bash ./update.sh --yes

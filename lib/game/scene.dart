@@ -23,6 +23,10 @@ class Background extends PositionComponent with HasGameReference<SutVeGolGame> {
 
   @override
   Future<void> onLoad() async {
+    if (game.isDuel) {
+      position = Vector2(kDuelBand.left, kDuelBand.top);
+      size = Vector2(kDuelBand.width, kDuelBand.height);
+    }
     _current = Sprite(game.images.fromCache(game.view.bgKey(game.stage)));
   }
 
@@ -106,7 +110,7 @@ class Ball extends PositionComponent with HasGameReference<SutVeGolGame> {
   /// Sol kenardan yuvarlanarak gelir.
   void enter() {
     final g = game.view;
-    Sfx.roll();
+    game.sfx(Sfx.roll);
     phase = BallPhase.entering;
     _t = 0;
     scale = Vector2.all(g.ballRestScale);
@@ -400,6 +404,16 @@ class TargetComp extends PositionComponent with HasGameReference<SutVeGolGame> {
     _pop = immediate ? 1 : 0;
   }
 
+  /// Düello kopyası: hedefi rakibin kaydındaki konuma koyar (rastgele yok).
+  void spawnAt(Vector2 p, {bool immediate = true}) {
+    _last = p.clone();
+    position = p.clone();
+    scale = Vector2.all(_viewScale);
+    visible = true;
+    _shrink = -1;
+    _pop = immediate ? 1 : 0;
+  }
+
   void hide() => visible = false;
 
   double _shrink = -1; // >=0: küçülerek kaybolma animasyonu
@@ -480,6 +494,22 @@ class Keeper extends PositionComponent with HasGameReference<SutVeGolGame> {
   }
 
   void deactivate() => active = false;
+
+  /// Etkinleştiğinden beri geçen süre (s); şut kaydına yazılır.
+  double get elapsed => _t;
+
+  /// Düello kopyası: kaleciyi rakibin kaydındaki faza getirir (null = pasif).
+  void syncTime(double? t) {
+    if (t == null) {
+      active = false;
+      return;
+    }
+    if (!active) {
+      active = true;
+      _appear = 1;
+    }
+    _t = t;
+  }
 
   double get _s => game.view.keeperScale;
 

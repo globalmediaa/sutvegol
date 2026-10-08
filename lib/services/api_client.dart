@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://api.example.com',
+  defaultValue: 'https://sutvegol.gmgaming.app/api',
 );
 
 class ApiException implements Exception {
@@ -25,6 +25,7 @@ class ApiClient {
   static const _storage = FlutterSecureStorage();
   String? _accessToken;
   String? _refreshToken;
+  Future<void>? _refreshing;
 
   Future<void> restore() async {
     _accessToken = await _storage.read(key: 'access_token');
@@ -113,21 +114,17 @@ class ApiClient {
         'Sunucuya ulaşılamadı. Bağlantını kontrol et.',
       );
     }
-    final decoded =
-        jsonDecode(response.body.isEmpty ? '{}' : response.body)
-            as Map<String, dynamic>;
+    late Map<String,dynamic> decoded;
+    try {
+      decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String,dynamic>;
+    } catch (_) {
+      throw const ApiException('server','Sunucu yanıtı alınamadı. Yeniden dene.');
+    }
     if (response.statusCode == 401 &&
         auth &&
         !retried &&
         _refreshToken != null) {
-      final refreshed = await _send(
-        'POST',
-        '/v1/auth/refresh',
-        data: {'refreshToken': _refreshToken},
-        auth: false,
-        retried: true,
-      );
-      await saveTokens(refreshed);
+      await (_refreshing ??= _refreshSession());
       return _send(method, path, data: data, auth: auth, retried: true);
     }
     if (response.statusCode < 200 ||
@@ -141,5 +138,13 @@ class ApiClient {
       );
     }
     return decoded;
+  }
+
+  Future<void> _refreshSession() async {
+    try {
+      final refreshed=await _send('POST','/v1/auth/refresh',
+          data:{'refreshToken':_refreshToken},auth:false,retried:true);
+      await saveTokens(refreshed);
+    } finally { _refreshing=null; }
   }
 }

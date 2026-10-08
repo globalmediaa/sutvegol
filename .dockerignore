@@ -1,0 +1,16 @@
+.git
+.env
+build
+.dart_tool
+ios
+android
+macos
+linux
+windows
+test
+assets
+store
+backend/vendor
+backend/.env
+
+secrets

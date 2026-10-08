@@ -11,9 +11,15 @@ import 'widgets.dart';
 /// Pause perdesi: bulanık karartma, "DURAKLATILDI" kartı; ses/titreşim
 /// anahtarları, skor + sıra özeti, altta Devam / Yeniden / Çıkış.
 class PauseOverlay extends StatefulWidget {
-  const PauseOverlay({super.key, required this.game, this.guest = false});
+  const PauseOverlay({
+    super.key,
+    required this.game,
+    this.guest = false,
+    this.onDuel,
+  });
   final SutVeGolGame game;
   final bool guest;
+  final VoidCallback? onDuel;
 
   @override
   State<PauseOverlay> createState() => _PauseOverlayState();
@@ -209,18 +215,29 @@ class _PauseOverlayState extends State<PauseOverlay>
                 ),
               TextButton(
                 onPressed: () => _open(
-                  'https://globalmediaa.github.io/sutvegol/privacy.html',
+                  'https://sutvegol.gmgaming.app/privacy',
                 ),
                 child: const Text('Gizlilik'),
               ),
               TextButton(
                 onPressed: () =>
-                    _open('https://globalmediaa.github.io/sutvegol/#destek'),
+                    _open('https://sutvegol.gmgaming.app/#destek'),
                 child: const Text('Destek'),
               ),
             ],
           ),
           SizedBox(height: 18 * s),
+          if (widget.onDuel != null) ...[
+            PillButton(
+              label: 'ONLINE DÜELLO',
+              icon: Icons.sports_soccer_rounded,
+              onTap: widget.onDuel!,
+              height: 52,
+              width: double.infinity,
+              fontSize: 17,
+            ),
+            const SizedBox(height: 12),
+          ],
           PillButton(
             label: 'DEVAM ET',
             icon: Icons.play_arrow_rounded,

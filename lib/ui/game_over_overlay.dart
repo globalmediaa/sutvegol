@@ -12,8 +12,9 @@ import 'widgets.dart';
 /// Oyun sonu perdesi: bulanık karartma, üstte çıkış, cam kart (sayaçla artan
 /// skor, rekor, sahne), sıra paneli ve "TEKRAR OYNA" hap butonu.
 class GameOverOverlay extends StatefulWidget {
-  const GameOverOverlay({super.key, required this.game});
+  const GameOverOverlay({super.key, required this.game, this.onDuel});
   final SutVeGolGame game;
+  final VoidCallback? onDuel;
 
   @override
   State<GameOverOverlay> createState() => _GameOverOverlayState();
@@ -99,6 +100,22 @@ class _GameOverOverlayState extends State<GameOverOverlay>
                   ),
                 ),
               ),
+              if (widget.onDuel != null)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  top: 630 * s,
+                  child: Center(
+                    child: PillButton(
+                      label: 'ONLINE DÜELLO',
+                      icon: Icons.sports_soccer_rounded,
+                      primary: false,
+                      onTap: widget.onDuel!,
+                      height: 48,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
             ],
           ),
         );

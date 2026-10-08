@@ -66,7 +66,7 @@ function access_token(array $user): string {
 }
 
 function current_user(): array {
-    if (!preg_match('/^Bearer\s+(.+)$/i', $_SERVER['HTTP_AUTHORIZATION'] ?? '', $match)) {
+    if (!preg_match('/^Bearer\s+(.+)$/i', $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '', $match)) {
         fail('unauthorized', 'Oturum gerekli.', 401);
     }
     try {
@@ -79,11 +79,17 @@ function current_user(): array {
     return $query->fetch() ?: fail('unauthorized', 'Hesap kullanılamıyor.', 401);
 }
 
+function providers(int $id): array {
+    $q=db()->prepare('SELECT provider FROM identities WHERE user_id=?'); $q->execute([$id]);
+    return $q->fetchAll(PDO::FETCH_COLUMN);
+}
+
 function public_user(array $user): array {
     return [
         'id' => $user['public_id'], 'email' => $user['email'], 'username' => $user['username'],
         'displayName' => $user['display_name'], 'avatarUrl' => $user['avatar_url'],
         'requiresUsername' => $user['username'] === null,
+        'providers' => providers((int)$user['id']),
     ];
 }
 
@@ -96,10 +102,11 @@ function issue_session(array $user): never {
 }
 
 function identity_claims(string $provider, string $token): array {
+    if (strlen($token)>8192 || substr_count($token,'.')!==2) fail('invalid_identity','Kimlik doğrulanamadı.',401);
     $url = $provider === 'apple' ? 'https://appleid.apple.com/auth/keys' : 'https://www.googleapis.com/oauth2/v3/certs';
     $cache = sys_get_temp_dir() . '/sutvegol-' . $provider . '-jwks.json';
     if (!is_file($cache) || filemtime($cache) < time() - 21600) {
-        $raw = @file_get_contents($url);
+        $raw = @file_get_contents($url, false, stream_context_create(['http'=>['timeout'=>8]]));
         if (!$raw) fail('provider_unavailable', 'Giriş servisine ulaşılamadı.', 503);
         file_put_contents($cache, $raw);
     }
@@ -113,6 +120,8 @@ function identity_claims(string $provider, string $token): array {
         ? [envv('APPLE_CLIENT_ID')]
         : array_map('trim', explode(',', envv('GOOGLE_CLIENT_IDS', '') ?? ''));
     if (!in_array((string) ($claims['aud'] ?? ''), $allowed, true)) fail('invalid_identity', 'Uygulama kimliği eşleşmedi.', 401);
-    if ($provider === 'apple' && ($claims['iss'] ?? '') !== 'https://appleid.apple.com') fail('invalid_identity', 'Apple kimliği geçersiz.', 401);
+    $issuers = $provider === 'apple' ? ['https://appleid.apple.com'] : ['https://accounts.google.com', 'accounts.google.com'];
+    if (!in_array($claims['iss'] ?? '', $issuers, true)) fail('invalid_identity', 'Giriş sağlayıcısı eşleşmedi.', 401);
+    if (!isset($claims['exp'], $claims['sub']) || (int)$claims['exp'] <= time()) fail('invalid_identity', 'Kimlik süresi doldu.', 401);
     return $claims;
 }

@@ -8,7 +8,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') output(['ok' => true]);
 $path = '/' . trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $method = $_SERVER['REQUEST_METHOD'];
 
-if ($path === '/health') output(['ok' => true, 'service' => 'sut-ve-gol', 'time' => gmdate('c')]);
+// The container hosts the website at / and keeps the API under /api.
+if (str_starts_with($path, '/api/')) $path = substr($path, 4);
+
+if (str_starts_with($path, '/v1/duels/')) {
+    header('Cache-Control: no-store');
+    require dirname(__DIR__) . '/src/duels.php';
+    $user = current_user();
+    try { output(duel_route($method, $path, $user)); }
+    catch (DuelError $e) { fail($e->kind, $e->getMessage(), $e->status); }
+    catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
+        error_log('Duel request failed: '.get_class($e));
+        fail('server', 'Düello servisine ulaşılamadı. Yeniden dene.', 503);
+    }
+}
+
+if ($path === '/health') {
+    try { db()->query('SELECT 1'); output(['ok'=>true,'service'=>'sut-ve-gol','duelVersion'=>1,'time'=>gmdate('c')]); }
+    catch (Throwable $e) { fail('unhealthy','Servis hazırlanıyor.',503); }
+}
 
 if ($method === 'POST' && $path === '/v1/auth/register') {
     rate_limit('register',8,300);
@@ -39,17 +58,34 @@ if ($method === 'POST' && $path === '/v1/auth/login') {
     issue_session($user);
 }
 
+if ($method === 'POST' && $path === '/v1/auth/apple/challenge') {
+    rate_limit('apple_challenge',20,300);
+    $id=bin2hex(random_bytes(16)); $nonce=bin2hex(random_bytes(32));
+    db()->prepare('DELETE FROM auth_challenges WHERE expires_at < NOW()')->execute();
+    db()->prepare('INSERT INTO auth_challenges(id,nonce_hash,expires_at) VALUES(?,?,DATE_ADD(NOW(),INTERVAL 5 MINUTE))')->execute([$id,hash('sha256',$nonce)]);
+    output(['ok'=>true,'challengeId'=>$id,'nonce'=>$nonce]);
+}
+
 if ($method === 'POST' && preg_match('#^/v1/auth/(google|apple)$#', $path, $match)) {
     rate_limit('social',20,300);
     $data = body(); $claims = identity_claims($match[1], (string) ($data['identityToken'] ?? '')); $subject = (string) ($claims['sub'] ?? '');
     if ($subject === '') fail('invalid_identity', 'Kimlik bilgisi eksik.', 401);
+    if ($match[1] === 'apple') {
+        $challengeId=(string)($data['challengeId']??'');
+        $nonce=(string)($claims['nonce']??'');
+        $consume=db()->prepare('UPDATE auth_challenges SET used_at=NOW() WHERE id=? AND nonce_hash=? AND used_at IS NULL AND expires_at>NOW()');
+        $consume->execute([$challengeId,hash('sha256',$nonce)]);
+        if ($nonce==='' || $consume->rowCount()!==1) fail('invalid_identity','Apple girişini yeniden başlat.',401);
+    }
     $query = db()->prepare('SELECT u.* FROM users u JOIN identities i ON i.user_id=u.id WHERE i.provider=? AND i.provider_subject=?');
     $query->execute([$match[1], $subject]); $user = $query->fetch();
     if (!$user) {
-        $email = isset($claims['email']) ? mb_strtolower((string) $claims['email']) : null;
+        $verified = in_array($claims['email_verified'] ?? false, [true,'true',1], true);
+        $email = $verified && isset($claims['email']) && filter_var($claims['email'], FILTER_VALIDATE_EMAIL) ? mb_strtolower((string)$claims['email']) : null;
         db()->beginTransaction();
         $existing = null;
         if ($email) { $find=db()->prepare('SELECT * FROM users WHERE email=?'); $find->execute([$email]); $existing=$find->fetch(); }
+        if ($existing && $existing['status'] !== 'active') { db()->rollBack(); fail('account_unavailable','Hesap kullanılamıyor.',403); }
         if ($existing) $id=(int)$existing['id'];
         else { db()->prepare('INSERT INTO users(public_id,email,display_name) VALUES(?,?,?)')->execute([public_id(),$email,trim((string)($data['displayName']??''))?:null]); $id=(int)db()->lastInsertId(); }
         db()->prepare('INSERT INTO identities(user_id,provider,provider_subject,email) VALUES(?,?,?,?)')->execute([$id, $match[1], $subject, $email]);
@@ -85,11 +121,20 @@ if ($method === 'PUT' && $path === '/v1/me/username') {
 }
 
 if ($method === 'DELETE' && $path === '/v1/me') {
-    $user=current_user(); db()->beginTransaction();
+    $user=current_user();
+    if (in_array('apple', providers((int)$user['id']), true)) {
+        $data=body(); $claims=identity_claims('apple',(string)($data['identityToken']??''));
+        $q=db()->prepare('SELECT provider_subject FROM identities WHERE user_id=? AND provider="apple"'); $q->execute([$user['id']]);
+        if (!hash_equals((string)$q->fetchColumn(),(string)($claims['sub']??''))) fail('apple_account','Hesabına bağlı Apple kimliğini kullan.',403);
+        require dirname(__DIR__).'/src/apple.php';
+        apple_revoke_code((string)($data['authorizationCode']??''),(string)$claims['sub']);
+    }
+    db()->beginTransaction();
+    db()->prepare('DELETE FROM duel_queue WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM identities WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM refresh_tokens WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM daily_user_stats WHERE user_id=?')->execute([$user['id']]);
-    db()->prepare('UPDATE users SET email=NULL,password_hash=NULL,username=NULL,username_key=NULL,display_name=NULL,avatar_url=NULL,status="deleted" WHERE id=?')->execute([$user['id']]);
+    db()->prepare('UPDATE users SET email=NULL,password_hash=NULL,username=NULL,username_key=NULL,display_name=NULL,avatar_url=NULL,public_id=?,status="deleted" WHERE id=?')->execute([public_id(),$user['id']]);
     db()->commit(); output(['ok'=>true]);
 }
 

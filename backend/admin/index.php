@@ -1,10 +1,11 @@
 <?php
 declare(strict_types=1);
-session_start(['cookie_httponly'=>true,'cookie_samesite'=>'Strict','cookie_secure'=>!empty($_SERVER['HTTPS'])]);
+session_start(['cookie_httponly'=>true,'cookie_samesite'=>'Strict','cookie_secure'=>!empty($_SERVER['HTTPS']) || ($_SERVER['HTTP_X_FORWARDED_PROTO']??'')==='https']);
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 if (isset($_GET['logout'])) { session_destroy(); header('Location: ./'); exit; }
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['email'],$_POST['password'])) {
+    rate_limit('admin_login',8,300);
     if (hash_equals(envv('ADMIN_EMAIL','')??'',trim($_POST['email'])) && password_verify($_POST['password'],envv('ADMIN_PASSWORD_HASH','')??'')) {
         session_regenerate_id(true); $_SESSION['admin']=true; header('Location: ./'); exit;
     }

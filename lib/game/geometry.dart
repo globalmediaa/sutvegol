@@ -12,6 +12,11 @@ const double kBallDiameter = 216;
 /// Hedef halkasının çapı.
 const double kTargetDiameter = 148;
 
+/// Düello kameralarının gösterdiği dünya bandı: üst direk/kale (1290-1636),
+/// kaleci rayı (1685) ve bekleyen top (2323 + yarıçap) içeride, tabela (846-1112)
+/// dışarıda kalır; skor/kalp bilgisi düello ekranındaki çubukta gösterilir.
+const Rect kDuelBand = Rect.fromLTRB(0, 1120, kWorldW, 2440);
+
 /// Oyunun sahneleri: skor arttıkça sokak → sahil → halı saha → stadyum.
 enum Stage {
   street('SOKAK', 0, Color(0xFFFF7A1A)),

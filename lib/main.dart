@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 
 import 'game/sut_ve_gol_game.dart';
+import 'game/sfx.dart';
 import 'services/auth_service.dart';
 import 'services/game_service.dart';
 import 'ui/auth_screen.dart';
@@ -16,6 +17,7 @@ import 'ui/pause_overlay.dart';
 import 'ui/profile_dialog.dart';
 import 'ui/theme.dart';
 import 'ui/username_screen.dart';
+import 'ui/duel_screen.dart';
 
 /// Geliştirme: `--dart-define=UI_PREVIEW=leaderboard|profile|pause|gameover` ile ekranı doğrudan açar.
 const String kUiPreview = String.fromEnvironment('UI_PREVIEW');
@@ -71,16 +73,20 @@ class _AuthGateState extends State<AuthGate> {
       if (auth.user == null && !guest) {
         return AuthScreen(onGuest: () => setState(() => guest = true));
       }
-      if (!guest && auth.user!.needsUsername) return const UsernameScreen();
-      return GameScreen(guest: guest);
+      if (auth.user?.needsUsername == true) return const UsernameScreen();
+      return GameScreen(
+        guest: auth.user == null,
+        onSignIn: () => setState(() => guest = false),
+      );
     },
   );
 }
 
 /// Oyun ekranı; çıkışta Yükleniyor gösterip oyunu baştan kurar.
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, this.guest = false});
+  const GameScreen({super.key, this.guest = false, this.onSignIn});
   final bool guest;
+  final VoidCallback? onSignIn;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -89,6 +95,30 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   final _online = GameSessionService();
   late SutVeGolGame _game = _create();
+
+  Future<void> _openDuel() async {
+    if (AuthService.instance.user == null) {
+      widget.onSignIn?.call();
+      return;
+    }
+    _game.pauseEngine();
+    Sfx.stopFeverLoop();
+    Sfx.stopAmbience();
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const DuelScreen()));
+    if (mounted) {
+      _game.resumeEngine();
+      Sfx.startAmbience(_game.stage);
+      if (_game.fever) Sfx.startFeverLoop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _game.pauseEngine();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -171,9 +201,10 @@ class _GameScreenState extends State<GameScreen> {
       key: ValueKey(_game),
       game: _game,
       overlayBuilderMap: {
-        kGameOverOverlay: (context, game) => GameOverOverlay(game: game),
+        kGameOverOverlay: (context, game) =>
+            GameOverOverlay(game: game, onDuel: _openDuel),
         kPauseOverlay: (context, game) =>
-            PauseOverlay(game: game, guest: widget.guest),
+            PauseOverlay(game: game, guest: widget.guest, onDuel: _openDuel),
       },
     ),
   );
