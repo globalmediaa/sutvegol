@@ -1,13 +1,15 @@
-TR — Şut ve Gol build 9 taslağı
+TR — Şut ve Gol build 9
 • 90 saniyelik çevrimiçi düello: rakibini üst sahada izlerken kendi şutlarını alt sahadan çek.
 • Apple, Google ve e-posta giriş ekranı yenilendi.
 • Bağlantı yenileme, maçtan çıkış ve küçük ekran görünümü iyileştirildi.
 • Oyun sahalarının bellek kullanımı azaltıldı.
 
-EN — Şut ve Gol build 9 draft
+EN — Şut ve Gol build 9
 • 90-second online duels: watch your opponent above while taking your own shots below.
 • Refreshed Apple, Google and email sign-in screens.
 • Improved reconnection, leaving matches and small-screen layouts.
 • Reduced memory use for game fields.
 
 TestFlight test notu: Çevrimiçi düello ve girişler sutvegol.gmgaming.app kurulumundan sonra test edilecek. Google iOS/Web client ID yapılandırması henüz eksik; bu build'de Google girişinin etkin olduğunu iddia etmeyin. Apple giriş yetkisi açıldı ve dağıtım profili yenilendi. Review'e gönderilmedi.
+
+Teslim: 1.0.0(9) TestFlight Testciler/Internal8, Türkçe test notu Saved.
