@@ -1,15 +1,11 @@
-TR — Şut ve Gol build 9
-• 90 saniyelik çevrimiçi düello: rakibini üst sahada izlerken kendi şutlarını alt sahadan çek.
-• Apple, Google ve e-posta giriş ekranı yenilendi.
-• Bağlantı yenileme, maçtan çıkış ve küçük ekran görünümü iyileştirildi.
-• Oyun sahalarının bellek kullanımı azaltıldı.
+TR: Şut ve Gol build 10
+• Yeni oyuncular için ilk açılış rehberi: canlı parmak animasyonu nişanı, falsoyu ve gücü gösteriyor; ardından halka, kaleci, kalpler ve sahneler.
+• İlk şut rehber eşliğinde atılıyor. "Geç" ile atlanabilir, bir daha çıkmaz.
+• Duraklat menüsüne "Nasıl oynanır" eklendi.
 
-EN — Şut ve Gol build 9
-• 90-second online duels: watch your opponent above while taking your own shots below.
-• Refreshed Apple, Google and email sign-in screens.
-• Improved reconnection, leaving matches and small-screen layouts.
-• Reduced memory use for game fields.
+EN: Şut ve Gol build 10
+• First-run tutorial for new players: a live finger animation shows aim, curve and power, then the ring, the keeper, hearts and stages.
+• Your first shot is guided. Tap "Geç" to skip it; it won't show again.
+• "Nasıl oynanır" (How to play) added to the pause menu.
 
-TestFlight test notu: Çevrimiçi düello ve girişler sutvegol.gmgaming.app kurulumundan sonra test edilecek. Google iOS/Web client ID yapılandırması henüz eksik; bu build'de Google girişinin etkin olduğunu iddia etmeyin. Apple giriş yetkisi açıldı ve dağıtım profili yenilendi. Review'e gönderilmedi.
-
-Teslim: 1.0.0(9) TestFlight Testciler/Internal8, Türkçe test notu Saved.
+TestFlight test notu: Temiz kurulumda oyuna girince rehber açılmalı; rekoru olan eski kurulumda açılmamalı. Duraklat > Nasıl oynanır ile yeniden açılır. Review'e gönderilmedi.

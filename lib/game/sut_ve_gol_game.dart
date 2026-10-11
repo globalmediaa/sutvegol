@@ -16,6 +16,7 @@ import 'scene_art.dart';
 import 'sfx.dart';
 import 'shot_record.dart';
 import 'splash.dart';
+import 'tutorial.dart';
 
 export 'shot_record.dart';
 
@@ -41,6 +42,7 @@ const String kStageOverride = String.fromEnvironment('STAGE');
 /// Flutter tarafındaki perdelerin overlay anahtarları.
 const String kGameOverOverlay = 'gameOver';
 const String kPauseOverlay = 'pause';
+const String kTutorialOverlay = 'tutorial';
 
 class _Scheduled {
   _Scheduled(this.at, this.fn);
@@ -136,6 +138,19 @@ class SutVeGolGame extends FlameGame {
   bool soundOn = true;
   bool hapticsOn = true;
 
+  /// İlk açılış rehberi yalnız gerçek oyun ekranında açılır (GameScreen açar);
+  /// testlerdeki ve mağaza çekimlerindeki çıplak oyunlar etkilenmez.
+  bool firstRunTutorial = false;
+  bool _tutorialPending = false;
+
+  /// Rehber perdesi her açılışta temiz durumla kurulsun diye artan sayaç.
+  int tutorialSession = 0;
+
+  /// Atılan tüm şutlar; koşu yeniden başlasa da sıfırlanmaz (rehber izler).
+  int kicks = 0;
+
+  bool get tutorialActive => overlays.isActive(kTutorialOverlay);
+
   SharedPreferences? _prefs;
   double _clock = 0;
   final List<_Scheduled> _queue = [];
@@ -198,6 +213,13 @@ class SutVeGolGame extends FlameGame {
     best = isReplica ? 0 : _prefs?.getInt('best') ?? 0;
     soundOn = _prefs?.getBool('sound') ?? true;
     hapticsOn = !isReplica && (_prefs?.getBool('haptics') ?? true);
+    final prefs = _prefs;
+    _tutorialPending =
+        firstRunTutorial &&
+        mode == GameMode.solo &&
+        !kAutoplay &&
+        prefs != null &&
+        TutorialProgress.shouldShow(prefs);
     if (!isReplica) {
       Sfx.enabled = soundOn;
       await Sfx.preload();
@@ -411,12 +433,17 @@ class SutVeGolGame extends FlameGame {
     }
     if (kFeverTest && !fever) startFever();
     if (isReplica) _drainInbox();
+    if (_tutorialPending && state == GameState.idle) {
+      _tutorialPending = false;
+      showTutorial();
+    }
   }
 
   void kick(Vector2 chord, double dev, double tMax, double power) {
     if (state != GameState.idle) return;
     state = GameState.flying;
     runShots++;
+    kicks++;
     _capture = _ShotCapture(
       t: ((_clock - _runStartClock) * 1000).round(),
       stage: stage,
@@ -884,6 +911,34 @@ class SutVeGolGame extends FlameGame {
     overlays.remove(kPauseOverlay);
     state = _stateBeforePause ?? GameState.idle;
   }
+
+  // ---------------------------------------------------------------- rehber
+
+  /// Rehberi ilk adımdan açar: ilk top hazır olunca ya da duraklat
+  /// menüsündeki "Nasıl oynanır" ile. Düelloda ve perde kayıtlı değilse yok.
+  void showTutorial() {
+    if (mode != GameMode.solo ||
+        !overlays.registeredOverlays.contains(kTutorialOverlay)) {
+      return;
+    }
+    input.cancelGesture();
+    tutorialSession++;
+    // Duraklat menüsünden açıldıysa perde kalkar ama oyun donuk kalır
+    // (Kral Modu süresi akmaz); rehber son adımda ya da kapanınca sürdürür.
+    overlays.remove(kPauseOverlay);
+    overlays.remove(kTutorialOverlay);
+    // Duraklat / oyun sonu perdeleri rehberin üstünde kalsın.
+    overlays.add(kTutorialOverlay, priority: -1);
+  }
+
+  /// Rehber bitti ya da geçildi: bayrak hemen kalıcı yazılır.
+  void markTutorialDone() {
+    _tutorialPending = false;
+    final prefs = _prefs;
+    if (prefs != null) TutorialProgress.markDone(prefs);
+  }
+
+  void closeTutorial() => overlays.remove(kTutorialOverlay);
 
   void restart() {
     if (isDuel) return;

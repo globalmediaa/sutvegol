@@ -16,6 +16,7 @@ import 'ui/mock_data.dart';
 import 'ui/pause_overlay.dart';
 import 'ui/profile_dialog.dart';
 import 'ui/theme.dart';
+import 'ui/tutorial_overlay.dart';
 import 'ui/username_screen.dart';
 import 'ui/duel_screen.dart';
 
@@ -31,6 +32,18 @@ Future<void> main() async {
   runApp(const SutVeGolApp());
 }
 
+/// Uygulama teması (testler ve ekran görüntüleri de aynısını kullanır).
+ThemeData appTheme() => ThemeData(
+  fontFamily: FK.font,
+  useMaterial3: true,
+  brightness: Brightness.dark,
+  scaffoldBackgroundColor: FK.navy,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: FK.orange,
+    brightness: Brightness.dark,
+  ),
+);
+
 class SutVeGolApp extends StatelessWidget {
   const SutVeGolApp({super.key});
 
@@ -38,16 +51,7 @@ class SutVeGolApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Şut ve Gol',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      fontFamily: FK.font,
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: FK.navy,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: FK.orange,
-        brightness: Brightness.dark,
-      ),
-    ),
+    theme: appTheme(),
     home: const AuthGate(),
   );
 }
@@ -149,7 +153,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   SutVeGolGame _create() {
-    final g = SutVeGolGame();
+    // İlk açılış rehberi: oyuncu oyun ekranına ilk girdiğinde, ilk top
+    // hazır olunca açılır (bayrak/eski ilerleme kontrolü oyunda).
+    final g = SutVeGolGame()..firstRunTutorial = kUiPreview.isEmpty;
     g.onExit = _exit;
     g.onRunStarted = () => unawaited(_online.start());
     g.onRunFinished = (run) => unawaited(
@@ -205,6 +211,8 @@ class _GameScreenState extends State<GameScreen> {
             GameOverOverlay(game: game, onDuel: _openDuel),
         kPauseOverlay: (context, game) =>
             PauseOverlay(game: game, guest: widget.guest, onDuel: _openDuel),
+        kTutorialOverlay: (context, game) =>
+            TutorialOverlay(key: ValueKey(game.tutorialSession), game: game),
       },
     ),
   );

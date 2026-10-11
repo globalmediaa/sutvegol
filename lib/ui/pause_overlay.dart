@@ -203,6 +203,7 @@ class _PauseOverlayState extends State<PauseOverlay>
             scale: s,
             onChanged: (v) => setState(() => game.setHaptics(v)),
           ),
+          _HowToRow(scale: s, onTap: game.showTutorial),
           Wrap(
             alignment: WrapAlignment.center,
             children: [
@@ -275,6 +276,50 @@ class _PauseOverlayState extends State<PauseOverlay>
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Nasıl oynanır": rehberi baştan açar (ses/titreşim satırlarıyla aynı dil).
+class _HowToRow extends StatelessWidget {
+  const _HowToRow({required this.onTap, this.scale = 1});
+  final VoidCallback onTap;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scale;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8 * s),
+        child: Row(
+          children: [
+            Container(
+              width: 40 * s,
+              height: 40 * s,
+              decoration: BoxDecoration(
+                color: FK.glass,
+                borderRadius: BorderRadius.circular(12 * s),
+              ),
+              child: Icon(
+                Icons.pan_tool_alt_rounded,
+                color: FK.amber,
+                size: 22 * s,
+              ),
+            ),
+            SizedBox(width: 12 * s),
+            Expanded(
+              child: Text(
+                'Nasıl oynanır',
+                style: FK.t(size: 16 * s, w: FontWeight.w600),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: FK.muted, size: 26 * s),
+          ],
+        ),
       ),
     );
   }
