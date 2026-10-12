@@ -18,6 +18,7 @@ IMAGE=sutvegol-app
 ENV_FILE="$BACKEND_DIR/.env"
 LOCK_FILE="$BACKEND_DIR/.deploy.lock"
 BACKUP_DIR="$BACKEND_DIR/.deploy-backups"
+ACME_ROOT=/var/www/letsencrypt
 TMP_DIR=""
 LOCK_DIR_HELD=0
 
@@ -243,8 +244,8 @@ find_cert() {
     $SUDO test -r "$SSL_CERT" && $SUDO test -r "$SSL_KEY" || die "backend/.env SSL_CERT/SSL_KEY dosyaları bulunamadı: $SSL_CERT / $SSL_KEY"
     return
   fi
-  for c in "/etc/ssl/cloudflare/$domain.pem:/etc/ssl/cloudflare/$domain.key" \
-           "/etc/letsencrypt/live/$domain/fullchain.pem:/etc/letsencrypt/live/$domain/privkey.pem"; do
+  for c in "/etc/letsencrypt/live/$domain/fullchain.pem:/etc/letsencrypt/live/$domain/privkey.pem" \
+           "/etc/ssl/cloudflare/$domain.pem:/etc/ssl/cloudflare/$domain.key"; do
     k="${c#*:}" c="${c%%:*}"
     if $SUDO test -r "$c" && $SUDO test -r "$k"; then SSL_CERT="$c" SSL_KEY="$k"; return; fi
   done
@@ -259,10 +260,13 @@ render_nginx() {
     while read -r r; do real+="    set_real_ip_from $r;"$'\n'; done < <(cloudflare_ranges)
     real+="    real_ip_header CF-Connecting-IP;"$'\n'
   fi
+  # Let's Encrypt webroot doğrulaması iki portta da çalışır (Cloudflare "Always Use HTTPS" açık olsa bile).
+  local acme="    location ^~ /.well-known/acme-challenge/ { root $ACME_ROOT; default_type text/plain; }"
   local body
   body="$(cat <<EOF
     client_max_body_size 256k;
 ${real}
+${acme}
     location ~ /(?:\.env|\.git|composer\.(?:json|lock)) { deny all; }
     location / {
         proxy_pass http://127.0.0.1:$port;
@@ -279,11 +283,84 @@ EOF
   echo "# Şut ve Gol API — backend/deploy/deploy.sh üretir. Elle değişiklik bir sonraki deploy'da ezilir;"
   echo "# ayar için backend/.env (DOMAIN, APP_PORT, SSL_CERT, SSL_KEY) kullan."
   if [[ -n "$cert" ]]; then
-    printf 'server {\n%s\n    server_name %s;\n    return 301 https://$host$request_uri;\n}\n\n' "$l80" "$domain"
+    printf 'server {\n%s\n    server_name %s;\n%s\n    location / { return 301 https://$host$request_uri; }\n}\n\n' "$l80" "$domain" "$acme"
     printf 'server {\n%s\n    server_name %s;\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n%s\n}\n' "$l443" "$domain" "$cert" "$key" "$body"
   else
     printf 'server {\n%s\n    server_name %s;\n%s\n}\n' "$l80" "$domain" "$body"
   fi
+}
+
+# 443'ü Nginx dışında bir süreç (ör. host'ta çalışan Caddy) tutuyorsa SSL bloğu eklenmez.
+check_443_owner() {
+  command -v ss >/dev/null 2>&1 || return 0
+  local l; l="$($SUDO ss -Hltnp 'sport = :443' 2>/dev/null || true)"
+  [[ -z "$l" ]] || grep -q '"nginx"' <<<"$l" \
+    || die "443 portunu Nginx dışında bir süreç dinliyor; Nginx'e 443 eklenemedi, hiçbir şeye dokunulmadı:"$'\n'"$l"
+}
+
+# $1 dosyasını kendi site yolumuza yazar; nginx -t geçmezse eski haline döner.
+install_nginx_conf() {
+  local new="$1"
+  if $SUDO test -f "$NGINX_AVAIL" && $SUDO cmp -s "$new" "$NGINX_AVAIL" && { [[ -z "$NGINX_ENABLED" ]] || $SUDO test -L "$NGINX_ENABLED"; }; then
+    info "Yapılandırma değişmedi: $NGINX_AVAIL"
+    return 0
+  fi
+  $SUDO "$NGINX_BIN" -t >/dev/null 2>&1 || die "Nginx'in mevcut yapılandırması zaten hatalı ('sudo nginx -t'); hiçbir şeye dokunulmadı."
+
+  # Aynı alan adını tanımlayan başka bir site varsa dokunma, kullanıcıya bırak.
+  local re="server_name[^;]*[[:space:]]${DOMAIN_RE}([[:space:];]|$)" f others=""
+  while read -r f; do
+    [[ -z "$f" ]] && continue
+    [[ "$($SUDO readlink -f "$f")" == "$($SUDO readlink -f "$NGINX_AVAIL" 2>/dev/null || echo "$NGINX_AVAIL")" ]] && continue
+    others+=" $f"
+  done < <($SUDO grep -RlsE "$re" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)
+  [[ -z "$others" ]] || die "Alan adı başka Nginx dosyasında da tanımlı:$others — o dosyayı kaldır/devre dışı bırak, sonra tekrar çalıştır."
+
+  local old="" had_link=0
+  if $SUDO test -f "$NGINX_AVAIL"; then old="$TMP_DIR/nginx.old"; $SUDO cat "$NGINX_AVAIL" > "$old"; fi
+  if [[ -n "$NGINX_ENABLED" ]] && $SUDO test -L "$NGINX_ENABLED"; then had_link=1; fi
+  $SUDO install -m 644 "$new" "$NGINX_AVAIL"
+  [[ -z "$NGINX_ENABLED" ]] || $SUDO ln -sfn "$NGINX_AVAIL" "$NGINX_ENABLED"
+  if ! $SUDO "$NGINX_BIN" -t >"$TMP_DIR/nginx-t.log" 2>&1; then
+    if [[ -n "$old" ]]; then $SUDO install -m 644 "$old" "$NGINX_AVAIL"; else $SUDO rm -f "$NGINX_AVAIL"; fi
+    [[ -n "$NGINX_ENABLED" && "$had_link" == 0 ]] && $SUDO rm -f "$NGINX_ENABLED"
+    cat "$TMP_DIR/nginx-t.log" >&2
+    die "Yeni Nginx yapılandırması geçersiz; eski hali geri yüklendi, Nginx yeniden yüklenmedi."
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then $SUDO systemctl reload nginx
+  else $SUDO "$NGINX_BIN" -s reload; fi
+  info "Yazıldı ve yeniden yüklendi: $NGINX_AVAIL"
+}
+
+# Let's Encrypt sertifikası alır (webroot; certbot Nginx dosyalarına dokunmaz). Başarısızsa 1 döner.
+issue_cert() {
+  local domain="$1" email token got="" attempt
+  if ! command -v certbot >/dev/null 2>&1; then
+    warn "certbot kurulu değil (sudo apt install certbot); SSL alınamadı."
+    return 1
+  fi
+  email="$(env_get ADMIN_EMAIL info@globalmedia.com.tr)"
+  token="sutvegol-check-$(openssl rand -hex 6)"
+  $SUDO mkdir -p "$ACME_ROOT/.well-known/acme-challenge"
+  echo "$token" | $SUDO tee "$ACME_ROOT/.well-known/acme-challenge/$token" >/dev/null
+  $SUDO chmod 644 "$ACME_ROOT/.well-known/acme-challenge/$token"
+  # Let's Encrypt'in izleyeceği yolu önce kendimiz dene: sınırlı deneme hakkını boşa harcamayalım.
+  # Nginx reload asenkron: yeni yapılandırma devreye girene kadar birkaç kez dene.
+  for attempt in 1 2 3 4 5 6; do
+    got="$(curl -fsSL --max-time 15 "http://$domain/.well-known/acme-challenge/$token" 2>/dev/null || true)"
+    [[ "$got" == "$token" ]] && break
+    sleep 2
+  done
+  $SUDO rm -f "$ACME_ROOT/.well-known/acme-challenge/$token"
+  if [[ "$got" != "$token" ]]; then
+    warn "http://$domain/.well-known/acme-challenge/ dışarıdan bu sunucuya ulaşmıyor; Let's Encrypt denenmedi."
+    warn "Cloudflare DNS kaydının bu sunucuyu gösterdiğini kontrol et; 'Always Use HTTPS' açıksa ilk kurulum için geçici kapat."
+    return 1
+  fi
+  info "Let's Encrypt sertifikası alınıyor ($email)..."
+  $SUDO certbot certonly --webroot -w "$ACME_ROOT" -d "$domain" --cert-name "$domain" \
+    --non-interactive --agree-tos -m "$email" --no-eff-email --keep-until-expiring \
+    --deploy-hook "systemctl reload nginx" || { warn "certbot başarısız (ayrıntı: /var/log/letsencrypt/letsencrypt.log)."; return 1; }
 }
 
 nginx_setup() {
@@ -297,67 +374,52 @@ nginx_setup() {
   else warn "Parolasız sudo yok; Nginx adımı atlandı (sunucuda elle: bash backend/deploy/deploy.sh --no-pull)."; return 0
   fi
 
-  local nginx_bin; nginx_bin="$(command -v nginx 2>/dev/null || echo /usr/sbin/nginx)"
+  NGINX_BIN="$(command -v nginx 2>/dev/null || echo /usr/sbin/nginx)"
+  DOMAIN_RE="${domain//./\\.}"
   local realip=0 ipv6=0
-  if [[ -x "$nginx_bin" ]] && "$nginx_bin" -V 2>&1 | grep -q 'http_realip_module'; then realip=1; fi
+  if [[ -x "$NGINX_BIN" ]] && "$NGINX_BIN" -V 2>&1 | grep -q 'http_realip_module'; then realip=1; fi
   [[ -f /proc/net/if_inet6 ]] && ipv6=1
-  [[ "$print_only" == 1 && ! -x "$nginx_bin" ]] && realip=1
+  [[ "$print_only" == 1 && ! -x "$NGINX_BIN" ]] && realip=1
 
   SSL_CERT="" SSL_KEY=""
   find_cert "$domain"
   local new="$TMP_DIR/nginx.conf"
-  render_nginx "$domain" "$port" "$SSL_CERT" "$SSL_KEY" "$realip" "$ipv6" > "$new"
-  if [[ "$print_only" == 1 ]]; then cat "$new"; return 0; fi
+  if [[ "$print_only" == 1 ]]; then
+    render_nginx "$domain" "$port" "$SSL_CERT" "$SSL_KEY" "$realip" "$ipv6"
+    return 0
+  fi
 
-  [[ -x "$nginx_bin" ]] || die "Nginx bulunamadı."
+  [[ -x "$NGINX_BIN" ]] || die "Nginx bulunamadı."
   [[ "$realip" == 1 ]] || warn "Nginx'te realip modülü yok: oyuncu IP'leri Cloudflare IP'si görünecek (hız sınırı paylaşılır)."
-
-  local avail enabled=""
   if [[ -d /etc/nginx/sites-enabled ]] && grep -qs 'sites-enabled' /etc/nginx/nginx.conf; then
-    avail="/etc/nginx/sites-available/$domain" enabled="/etc/nginx/sites-enabled/$domain"
+    NGINX_AVAIL="/etc/nginx/sites-available/$domain" NGINX_ENABLED="/etc/nginx/sites-enabled/$domain"
   else
-    avail="/etc/nginx/conf.d/$domain.conf"
+    NGINX_AVAIL="/etc/nginx/conf.d/$domain.conf" NGINX_ENABLED=""
   fi
 
-  if $SUDO test -f "$avail" && $SUDO cmp -s "$new" "$avail" && { [[ -z "$enabled" ]] || $SUDO test -L "$enabled"; }; then
-    info "Yapılandırma değişmedi: $avail"
-  else
-    $SUDO "$nginx_bin" -t >/dev/null 2>&1 || die "Nginx'in mevcut yapılandırması zaten hatalı ('sudo nginx -t'); hiçbir şeye dokunulmadı."
-
-    # Aynı alan adını tanımlayan başka bir site varsa dokunma, kullanıcıya bırak.
-    local re="server_name[^;]*[[:space:]]${domain//./\\.}([[:space:];]|$)" f others=""
-    while read -r f; do
-      [[ -z "$f" ]] && continue
-      [[ "$($SUDO readlink -f "$f")" == "$($SUDO readlink -f "$avail" 2>/dev/null || echo "$avail")" ]] && continue
-      others+=" $f"
-    done < <($SUDO grep -RlsE "$re" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)
-    [[ -z "$others" ]] || die "$domain başka Nginx dosyasında da tanımlı:$others — o dosyayı kaldır/devre dışı bırak, sonra tekrar çalıştır."
-
-    local old="" had_link=0
-    if $SUDO test -f "$avail"; then old="$TMP_DIR/nginx.old"; $SUDO cat "$avail" > "$old"; fi
-    if [[ -n "$enabled" ]] && $SUDO test -L "$enabled"; then had_link=1; fi
-    $SUDO install -m 644 "$new" "$avail"
-    [[ -z "$enabled" ]] || $SUDO ln -sfn "$avail" "$enabled"
-    if ! $SUDO "$nginx_bin" -t >"$TMP_DIR/nginx-t.log" 2>&1; then
-      if [[ -n "$old" ]]; then $SUDO install -m 644 "$old" "$avail"; else $SUDO rm -f "$avail"; fi
-      [[ -n "$enabled" && "$had_link" == 0 ]] && $SUDO rm -f "$enabled"
-      cat "$TMP_DIR/nginx-t.log" >&2
-      die "Yeni Nginx yapılandırması geçersiz; eski hali geri yüklendi, Nginx yeniden yüklenmedi."
-    fi
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then $SUDO systemctl reload nginx
-    else $SUDO "$nginx_bin" -s reload; fi
-    info "Yazıldı ve yeniden yüklendi: $avail"
+  if [[ -z "$SSL_CERT" ]]; then
+    # Önce HTTP + doğrulama yolu, sonra sertifika.
+    check_443_owner
+    render_nginx "$domain" "$port" "" "" "$realip" "$ipv6" > "$new"
+    install_nginx_conf "$new"
+    if issue_cert "$domain"; then find_cert "$domain"; fi
   fi
+  if [[ -n "$SSL_CERT" ]]; then check_443_owner; fi
+  render_nginx "$domain" "$port" "$SSL_CERT" "$SSL_KEY" "$realip" "$ipv6" > "$new"
+  install_nginx_conf "$new"
 
+  local url="http://127.0.0.1/api/health" opts=(-H "Host: $domain") ok=0 attempt
   if [[ -n "$SSL_CERT" ]]; then
     info "SSL: $SSL_CERT"
-    curl -fsSk --max-time 10 --resolve "$domain:443:127.0.0.1" "https://$domain/api/health" >/dev/null 2>&1 \
-      && info "Nginx → uygulama (https) çalışıyor." || warn "https://$domain/api/health sunucu içinden yanıt vermedi."
+    url="https://$domain/api/health" opts=(-k --resolve "$domain:443:127.0.0.1")
   else
-    warn "SSL sertifikası bulunamadı; yalnız 80 portu açıldı. Cloudflare Origin sertifikasını kur (backend/README.md) ve tekrar çalıştır."
-    curl -fsS --max-time 10 -H "Host: $domain" "http://127.0.0.1/api/health" >/dev/null 2>&1 \
-      && info "Nginx → uygulama (http) çalışıyor." || warn "http://$domain/api/health sunucu içinden yanıt vermedi."
+    warn "SSL sertifikası yok; yalnız 80 portu açık (Cloudflare Full/strict modunda 526 verir). Yukarıdaki uyarıyı düzeltip tekrar çalıştır."
   fi
+  for attempt in 1 2 3 4 5; do
+    if curl -fsS --max-time 10 "${opts[@]}" "$url" >/dev/null 2>&1; then ok=1; break; fi
+    sleep 2
+  done
+  if [[ "$ok" == 1 ]]; then info "Nginx → uygulama çalışıyor (${url%%/api*})."; else warn "$url sunucu içinden yanıt vermedi."; fi
 }
 
 # ---------------------------------------------------------------- ana akış

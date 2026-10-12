@@ -10,14 +10,7 @@ Sunucuya ait her şey `backend/` altındadır: `compose.yaml`, `Dockerfile`, `de
 
 1. **Gereksinimler:** Docker + Compose v2 (`docker compose version`), git, curl, openssl. Deploy kullanıcısı `docker` grubunda olmalı (`sudo usermod -aG docker $USER`, sonra yeniden bağlan). Nginx adımı için sudo gerekir.
 2. **Cloudflare SSL modu:** `sutvegol.gmgaming.app` için **Full (strict)**. Zone'daki diğer siteler farklı modda çalışıyorsa zone ayarını değiştirme; Rules → Configuration Rules ile yalnız bu hostname için SSL = Full (strict) kuralı ekle. (Flexible modda Nginx'in 80→443 yönlendirmesi sonsuz döngü yapar.)
-3. **Origin sertifikası:** Cloudflare → SSL/TLS → Origin Server → Create Certificate (hostname `sutvegol.gmgaming.app`, PEM). Sunucuya yerleştir:
-   ```bash
-   sudo mkdir -p /etc/ssl/cloudflare
-   sudo nano /etc/ssl/cloudflare/sutvegol.gmgaming.app.pem   # Origin Certificate
-   sudo nano /etc/ssl/cloudflare/sutvegol.gmgaming.app.key   # Private Key
-   sudo chmod 600 /etc/ssl/cloudflare/sutvegol.gmgaming.app.key
-   ```
-   Sunucuda zaten `*.gmgaming.app` sertifikası varsa onu kullanmak için ilk deploy'dan sonra `backend/.env` içine `SSL_CERT=` / `SSL_KEY=` yollarını yaz. `/etc/letsencrypt/live/sutvegol.gmgaming.app/` varsa o da otomatik bulunur.
+3. **SSL sertifikası otomatik:** deploy.sh sertifika bulamazsa certbot ile Let's Encrypt sertifikası alır (`certbot certonly --webroot -w /var/www/letsencrypt`, e-posta `ADMIN_EMAIL`). certbot Nginx dosyalarına dokunmaz; yenileme mevcut certbot timer'ı ile olur, sonrasında Nginx reload edilir. Önce doğrulama yolunu Cloudflare üzerinden kendisi dener; ulaşmıyorsa Let's Encrypt'i hiç denemez. Cloudflare "Always Use HTTPS" açıksa ilk sertifika için geçici kapat. 443 portunu Nginx dışında bir süreç (ör. host'ta Caddy) tutuyorsa hiçbir şeye dokunmadan durur. Elle sertifika kullanmak istersen `backend/.env` içine `SSL_CERT=` / `SSL_KEY=` yaz (ör. Cloudflare Origin Certificate).
 4. **Port:** 12883 doluysa ilk deploy'dan sonra `backend/.env` içinde `APP_PORT`'u değiştir; Nginx otomatik güncellenir. Güvenlik duvarında yeni port açmaya gerek yok (yalnız 80/443).
 
 ## İlk kurulum
