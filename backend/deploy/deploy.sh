@@ -42,7 +42,9 @@ cleanup() {
 }
 
 dc() { docker compose -p "$PROJECT" -f "$BACKEND_DIR/compose.yaml" --env-file "$ENV_FILE" "$@"; }
-db_sql() { dc exec -T db sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -h127.0.0.1 -u"$MYSQL_USER" "$MYSQL_DATABASE" "$@"' sh "$@"; }
+# compose exec -T bazı sürümlerde stdin iletmiyor (migration sessizce boş gider); docker exec -i her zaman iletir.
+db_exec() { local cid; cid="$(dc ps -q db 2>/dev/null || true)"; [[ -n "$cid" ]] || return 1; docker exec -i "$cid" "$@"; }
+db_sql() { db_exec sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -h127.0.0.1 -u"$MYSQL_USER" "$MYSQL_DATABASE" "$@"' sh "$@"; }
 
 # .env içindeki KEY değerini (tırnaksız) döndürür; yoksa $2.
 env_get() {
@@ -168,7 +170,7 @@ deploy_docker() {
   dc up -d db
   for attempt in $(seq 1 90); do
     # TCP ile bağlan: ilk kurulumdaki geçici (soket-only) MySQL sunucusu şema bitmeden sayılmasın.
-    if db_sql -e 'SELECT 1' >/dev/null 2>&1; then break; fi
+    if db_sql -e 'SELECT 1' </dev/null >/dev/null 2>&1; then break; fi
     [[ "$attempt" == 90 ]] && die "Veritabanı 3 dakikada hazır olmadı: docker compose -p $PROJECT logs --tail=100 db"
     sleep 2
   done
@@ -176,7 +178,7 @@ deploy_docker() {
 
   local backup
   backup="$BACKUP_DIR/db-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-  (umask 077; dc exec -T db sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysqldump --single-transaction --no-tablespaces -u"$MYSQL_USER" "$MYSQL_DATABASE"' | gzip > "$backup") \
+  (umask 077; db_exec sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysqldump --single-transaction --no-tablespaces -u"$MYSQL_USER" "$MYSQL_DATABASE"' </dev/null | gzip > "$backup") \
     || die "Veritabanı yedeği alınamadı; migration ve güncelleme yapılmadı."
   info "Yedek: backend/${backup#"$BACKEND_DIR"/} ($(du -h "$backup" | cut -f1))"
 
