@@ -1,11 +1,17 @@
+# Proje adı sabit: konteyner/ağ/volume adları sutvegol-* olur, sunucudaki diğer
+# Compose projeleriyle çakışmaz. Sadece backend/deploy/deploy.sh ile çalıştır.
+name: sutvegol
 services:
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: sutvegol-app:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:${APP_PORT:-12883}:80"
     environment:
-      APP_URL: https://sutvegol.gmgaming.app
+      APP_URL: https://${DOMAIN:-sutvegol.gmgaming.app}
       APP_KEY: ${APP_KEY:?APP_KEY is required}
       DB_DSN: mysql:host=db;dbname=sutvegol;charset=utf8mb4
       DB_USER: sutvegol
@@ -36,10 +42,10 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./backend/database/migrations/20261008_duels.sql:/docker-entrypoint-initdb.d/02-duels.sql:ro
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/migrations/20261008_duels.sql:/docker-entrypoint-initdb.d/02-duels.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -usutvegol --database=sutvegol -e 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h127.0.0.1 -usutvegol --database=sutvegol -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 20

@@ -1,0 +1,10 @@
+# Build context depo köküdür; oyun dosyaları (lib, ios, android, build...) imaja gönderilmez.
+*
+!backend/composer.json
+!backend/composer.lock
+!backend/src
+!backend/admin
+!backend/public
+!backend/deploy/apache.conf
+!backend/deploy/php.ini
+!docs

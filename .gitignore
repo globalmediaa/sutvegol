@@ -34,9 +34,12 @@ migrate_working_dir/
 /coverage/
 /backend/vendor/
 /backend/.env
+/backend/.deploy.lock
+/backend/.deploy.lock.d/
+/backend/.deploy-backups/
+/backend/secrets/
+# Eski düzen (deploy.sh bunları backend/ altına taşır)
 /.env
-/.deploy.lock
-/.deploy-backups/
 
 # Symbolication related
 app.*.symbols

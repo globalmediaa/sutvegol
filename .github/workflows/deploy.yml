@@ -29,4 +29,4 @@ jobs:
             git fetch origin prod
             git switch prod
             git pull --ff-only origin prod
-            bash ./update.sh --yes
+            bash backend/deploy/deploy.sh --no-pull
