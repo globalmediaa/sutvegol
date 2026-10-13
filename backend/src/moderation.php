@@ -340,6 +340,7 @@ function mod_report(array $user, array $data): array {
         $insert->execute([$uid, $tid, $reason, $context, $duelId, $note, $name]);
         if ($insert->rowCount() === 1) return ['ok' => true, 'reported' => true];
         $existing = $find(); // aynı anda gelen ikinci istek
+        if (!$existing) fail('server', 'Şikâyet kaydedilemedi. Yeniden dene.', 503);
     }
     // Aynı kişi → aynı hedef: tek kayıt güncellenir. Reddedilmiş şikâyet aynı ad ve sebeple yeniden açılmaz.
     $same = $existing['status'] === 'dismissed' && $existing['reason'] === $reason
