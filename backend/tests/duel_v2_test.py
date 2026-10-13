@@ -2,15 +2,18 @@
 """Düello v2 (hibrit) gerçek PHP/MySQL testleri. Kendi tek kullanımlık test DB'sini oluşturur.
 
 Kapsam: v1 istemci reddi, şut saati + combo doğrulaması, sonuç + Glicko rating, rövanş,
-kopma rozeti / hükmen, ghost seçimi (kendi koşusu değil, CPU yedeği) ve oynatma verisi,
-ghost maçının rating'e sayılmaması, eşleşme bandı ve saf PHP unit testleri.
+kopma rozeti / hükmen, ghost seçimi (kendi koşusu değil, CPU yedeği, yarım koşu değil) ve
+oynatma verisi, ghost maçının rating'e sayılmaması, eşleşme bandı, reddedilen şutta geçerli
+önekin kalıcılığı + `me` durumu, gecikme alt sınırı / şut tavanı, şutsuz çekilmede rating yok,
+rövanşın eşleşme kilidini alması ve saf PHP unit testleri.
 """
-import os
+import hashlib
 import subprocess
+import time
 import unittest
 from pathlib import Path
 
-from harness import PHP, Server, V2Run, mysql, reset_schema
+from harness import DB_NAME, DB_PASS, DB_USER, MYSQL, PHP, Server, V2Run, mysql, reset_schema
 
 Q = {'duelVersion': 2}
 NOW = "UNIX_TIMESTAMP(NOW(3))*1000"
@@ -26,7 +29,8 @@ class DuelV2(unittest.TestCase):
         reset_schema()
         cls.server = Server(); cls.s = cls.server.__enter__()
         cls.u = {n: cls.s.register('v2_' + n) for n in
-                 ['ana', 'bek', 'cem', 'dua', 'ece', 'fat', 'gul', 'han', 'ilk', 'jale']}
+                 ['ana', 'bek', 'cem', 'dua', 'ece', 'fat', 'gul', 'han', 'ilk', 'jale',
+                  'kaan', 'lale', 'mert', 'nur', 'oya', 'pir', 'rana', 'sel', 'tan', 'uzay']}
 
     @classmethod
     def tearDownClass(cls): cls.server.__exit__()
@@ -43,7 +47,15 @@ class DuelV2(unittest.TestCase):
         na = self.s.get('/v1/duels/' + id, self.u[a]['token'])[1]['duel']['nonce']
         return id, na, r['duel']['nonce']
 
-    def send(self, who, id, nonce, events):
+    def at(self, id, ms):
+        """Maç saatini `ms`'ye taşır (sunucu: olay t'si ≤ saat + 1 sn ve ≥ saat − 12 sn)."""
+        mysql(f"UPDATE duels SET starts_at_ms={NOW}-{int(ms)},ends_at_ms={NOW}+{90000 - int(ms)} WHERE id='{id}'")
+
+    def send(self, who, id, nonce, events, at=None):
+        # Gerçek istemci gibi: paket son şutun sonuçlanmasından kısa süre sonra ulaşır.
+        if at is None:
+            at = max(max(e['t'], e.get('rt', 0)) for e in events) + 300
+        self.at(id, at)
         return self.s.post(f'/v1/duels/{id}/events', dict(nonce=nonce, events=events), self.u[who]['token'])
 
     def end(self, id):
@@ -96,11 +108,11 @@ class DuelV2(unittest.TestCase):
         s, r = self.send('ana', id, na, [e1, e2, e3]); self.assertEqual(s, 200, r)
         self.assertEqual(self.me(r['duel'], 'ana')['combo'], 3)
         # Şut saati: 5 sn + döngü payını aşan boşluk reddedilir; erken timeout reddedilir.
-        late = V2Run(); late.__dict__.update(a.__dict__); slow = late.event(dt=10500)
+        late = V2Run(); late.__dict__.update(a.__dict__); slow = late.event(dt=11100)  # önceki rt'den 10,1 sn
         self.assertEqual(self.send('ana', id, na, [slow])[1]['error']['code'], 'shot_clock')
         early = V2Run(); early.__dict__.update(a.__dict__); eto = early.event(timeout=True, dt=3000)
         self.assertEqual(self.send('ana', id, na, [eto])[1]['error']['code'], 'shot_clock')
-        to = a.event(timeout=True, dt=5200)
+        to = a.event(timeout=True, dt=6000)  # önceki sonuçtan 5 sn
         s, r = self.send('ana', id, na, [to]); self.assertEqual(s, 200, r)
         mine = self.me(r['duel'], 'ana')
         self.assertEqual((mine['combo'], mine['maxStreak'], mine['finished']), (0, 3, False))
@@ -185,9 +197,9 @@ class DuelV2(unittest.TestCase):
             nonce = snap['nonce']
             if i == 0:
                 # İnsan gibi ghost'u yenerse kazanır; rating değişmez, XP gelir.
-                mysql(f"UPDATE duels SET starts_at_ms={NOW}-60000 WHERE id='{d['id']}'")
-                mine = V2Run(); evs = [mine.event(dt=1200) for _ in range(30)]
-                self.assertEqual(self.send('ece', d['id'], nonce, evs)[0], 200)
+                mine = V2Run(); evs = [mine.event(dt=1600) for _ in range(30)]
+                for k in range(0, 30, 5):
+                    self.assertEqual(self.send('ece', d['id'], nonce, evs[k:k + 5])[0], 200)
                 self.end(d['id'])
                 res = self.s.get(f"/v1/duels/{d['id']}", self.u['ece']['token'])[1]['duel']['result']
                 ghost_final = g['events'][-1]['score']
@@ -216,6 +228,90 @@ class DuelV2(unittest.TestCase):
         s, r = self.queue('han'); self.assertEqual(r['duel']['kind'], 'live')
         self.assertEqual(sorted(p['id'] for p in r['duel']['players']), sorted([g, h]))
         self.s.delete('/v1/duels/queue', token=self.u['han']['token'])
+
+    def test_08_rejected_event_keeps_prefix_and_reports_state(self):
+        id, nr, ns = self.pair('rana', 'sel')
+        run = V2Run(); e1, e2 = run.event(), run.event()
+        bad = run.event(); bad = dict(bad, score=bad['score'] + 30)
+        s, r = self.send('rana', id, nr, [e1, e2, bad])
+        self.assertEqual((s, r['error']['code'], r['error']['seq'], r['error']['acceptedSeq']), (422, 'score_math', 3, 2))
+        d = self.s.get(f'/v1/duels/{id}', self.u['rana']['token'])[1]['duel']
+        self.assertEqual(d['myAcceptedSeq'], 2)
+        me = d['me']
+        self.assertEqual((me['score'], me['shots'], me['hits'], me['misses'], me['streak'], me['maxStreak'], me['fever']),
+                         (90, 2, 2, 0, 2, 2, False))
+        self.assertEqual((me['lastT'], me['lastRt'], me['lastStage']), (e2['t'], e2['rt'], 'street'))
+        # Aynı paket yeniden gelirse geçerli önek idempotent, ret aynı: istemci olayı düşürür.
+        self.assertEqual(self.send('rana', id, nr, [e1, e2, bad])[1]['error']['acceptedSeq'], 2)
+        # Sunucu durumundan devam eden sonraki şutlar akar.
+        run2 = V2Run(); run2.event(); run2.event()
+        e3, e4 = run2.event(dt=2500), run2.event(hit=False)
+        s, r = self.send('rana', id, nr, [e3, e4]); self.assertEqual(s, 200, r)
+        self.assertEqual((r['duel']['myAcceptedSeq'], r['duel']['me']['score']), (4, 180))
+
+    def test_09_late_event_lower_bound(self):
+        id, nt, nu = self.pair('tan', 'uzay')
+        run = V2Run(); e1 = run.event(dt=2000)
+        s, r = self.send('tan', id, nt, [e1], at=e1['t'] + 12100)
+        self.assertEqual((s, r['error']['code'], r['error']['acceptedSeq']), (422, 'invalid_timing', 0))
+        s, r = self.send('tan', id, nt, [e1], at=e1['t'] + 11500); self.assertEqual(s, 200, r)
+        # Gelecekten şut da reddedilir.
+        e2 = run.event()
+        self.assertEqual(self.send('tan', id, nt, [e2], at=e2['t'] - 1500)[1]['error']['code'], 'invalid_timing')
+
+    def test_10_ghost_pool_skips_half_runs(self):
+        # Önceki testlerin koşularını havuzdan çıkar (30 günden eski).
+        mysql("UPDATE duels SET created_at=DATE_SUB(NOW(),INTERVAL 40 DAY) WHERE status='finished'")
+        id, nk, nl = self.pair('kaan', 'lale')
+        run = V2Run()
+        self.assertEqual(self.send('kaan', id, nk, [run.event() for _ in range(4)])[0], 200)
+        r = self.s.post(f'/v1/duels/{id}/forfeit', {}, self.u['lale']['token'])[1]['duel']['result']
+        self.assertEqual((r['reason'], r['ratingCounted']), ('forfeit', False))  # lale hiç şut atmadı
+        # Rakip 6. sn'de çekildi: kaan'ın 4 şutluk yarım koşusu ghost olamaz → CPU.
+        g = self.ghost_duel('mert')
+        self.assertEqual(g['duel']['ghost']['source'], 'cpu')
+        self.s.post(f"/v1/duels/{g['duel']['id']}/forfeit", {}, self.u['mert']['token'])
+        # Son şutu ≥ 60. sn olan koşu (rakip geç çekildi) seçilebilir.
+        mysql(f"UPDATE duel_players SET last_shot_ms=61000 WHERE duel_id='{id}'")
+        g = self.ghost_duel('nur')
+        self.assertEqual(g['duel']['ghost']['source'], 'recorded')
+        self.assertEqual(next(p for p in g['duel']['players'] if p['ghost'])['username'], 'v2_kaan')
+        self.s.post(f"/v1/duels/{g['duel']['id']}/forfeit", {}, self.u['nur']['token'])
+
+    def test_11_no_rating_without_shots_on_both_sides(self):
+        # Geri sayımda (şut yok) çekilme: rakip kazanır ama rating'e sayılmaz.
+        self.assertEqual(self.queue('oya')[1]['status'], 'waiting')
+        s, r = self.queue('pir'); self.assertEqual((s, r['duel']['status']), (200, 'countdown'))
+        res = self.s.post(f"/v1/duels/{r['duel']['id']}/forfeit", {}, self.u['pir']['token'])[1]['duel']['result']
+        self.assertEqual((res['reason'], res['ratingCounted'], res['ratingAfter']), ('forfeit', False, None))
+        won = self.s.get(f"/v1/duels/{r['duel']['id']}", self.u['oya']['token'])[1]['duel']['result']
+        self.assertEqual((won['winnerId'], won['ratingCounted']), (self.u['oya']['user']['id'], False))
+        self.assertEqual(self.s.get('/v1/duels/stats', self.u['oya']['token'])[1]['stats']['games'], 0)
+        # İki taraf da şut attıysa çekilme rating'li sonuçtur.
+        id, no, np = self.pair('oya', 'pir')
+        self.assertEqual(self.send('oya', id, no, [V2Run().event()])[0], 200)
+        self.assertEqual(self.send('pir', id, np, [V2Run().event(hit=False)])[0], 200)
+        res = self.s.post(f'/v1/duels/{id}/forfeit', {}, self.u['pir']['token'])[1]['duel']['result']
+        self.assertTrue(res['ratingCounted'])
+        self.__class__.counted_id = id
+
+    def test_12_rematch_takes_match_lock(self):
+        id = self.counted_id
+        dsn = f"mysql:host=127.0.0.1;dbname={DB_NAME};charset=utf8mb4"
+        lock = 'svduel_' + hashlib.sha256(dsn.encode()).hexdigest()[:40]
+        cmd = [MYSQL, f'-u{DB_USER}'] + ([f'-p{DB_PASS}'] if DB_PASS else []) + [DB_NAME, '-e', f"SELECT GET_LOCK('{lock}',0); SELECT SLEEP(5);"]
+        holder = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(1)
+            s, r = self.s.post(f'/v1/duels/{id}/rematch', {}, self.u['oya']['token'])
+            self.assertEqual((s, r['error']['code']), (503, 'busy'))  # kuyrukla aynı kilidi bekledi
+        finally:
+            holder.wait(timeout=10)
+        mysql(f"UPDATE duels SET finished_at_ms={NOW} WHERE id='{id}'")
+        self.assertEqual(self.s.post(f'/v1/duels/{id}/rematch', {}, self.u['oya']['token'])[0], 200)
+        r = self.s.post(f'/v1/duels/{id}/rematch', {}, self.u['pir']['token'])[1]['duel']['rematch']
+        self.assertTrue(r['duelId'])
+        self.s.post(f"/v1/duels/{r['duelId']}/forfeit", {}, self.u['pir']['token'])
 
 
 if __name__ == '__main__':

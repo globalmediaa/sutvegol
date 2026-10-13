@@ -78,6 +78,7 @@ DuelSnapshot snapshot({
   List<ShotRecord>? ghostEvents,
   DuelRematch? rematch,
   String id = 'duel',
+  DuelSelfState? self,
 }) => DuelSnapshot(
   id: id,
   seed: 1,
@@ -98,12 +99,14 @@ DuelSnapshot snapshot({
   ratingAfter: finished && !ghost ? 1562 : null,
   ratingCounted: finished && !ghost,
   rematch: rematch,
+  me: self,
 );
 
 class FakeApi implements DuelApi {
   DuelSnapshot? next;
   Completer<DuelSnapshot?>? joining;
   bool failSend = false;
+  ApiException? sendError;
   int joins = 0, cancels = 0, polls = 0, finishes = 0, forfeits = 0;
   int rematches = 0;
   DuelSnapshot? rematchNext;
@@ -146,6 +149,7 @@ class FakeApi implements DuelApi {
   ) async {
     sent.add(events);
     if (failSend) throw const ApiException('network', 'retry');
+    if (sendError != null) throw sendError!;
     return next!;
   }
 
@@ -191,6 +195,12 @@ void main() {
         throwsFormatException,
       );
       expect(ShotRecord.fromJson(j).consistent, true);
+      expect(j['rt'], j['t']);
+      expect(ShotRecord.fromJson({...j, 'rt': 2500}).rt, 2500);
+      expect(
+        () => ShotRecord.fromJson({...j, 'rt': (j['t'] as int) - 1}),
+        throwsFormatException,
+      );
     },
   );
   test('server clock, retry, idempotence, ordered relay and finish', () async {
@@ -235,6 +245,75 @@ void main() {
     expect(api.finishes, 1);
     c.dispose();
   });
+  test(
+    '422: rejected shot is dropped, local state realigns, next shots flow',
+    () async {
+      int now = 3000;
+      final api = FakeApi()..next = snapshot(now: 3000);
+      final c = DuelController(
+        userId: 'me',
+        api: api,
+        now: () => now,
+        autoPoll: false,
+      );
+      final realigned = <DuelSelfState>[];
+      c.onRealign = realigned.add;
+      await c.start();
+      c.addShot(shot(1));
+      c.addShot(shot(2));
+      // Sunucu 2. şutu reddeder (1. kalıcı); paket tekrar gönderilmez.
+      api.sendError = const ApiException('score_math', 'Skor eşleşmedi.', 422);
+      await c.synchronize();
+      expect(api.sent.single.map((e) => e.seq), [1, 2]);
+      expect((c.pendingShots, c.realigning, c.rejectedShots), (0, true, 2));
+      expect((c.connected, c.error), (true, null));
+      // Yeniden hizalanana dek eski zincirin şutu kuyruğa girmez.
+      c.addShot(shot(3));
+      expect(c.pendingShots, 0);
+      api.sendError = null;
+      const me = DuelSelfState(
+        score: 30,
+        shots: 1,
+        hits: 1,
+        misses: 0,
+        streak: 1,
+        maxStreak: 1,
+        feverHits: 0,
+        fever: false,
+        feverT: 0,
+        lastT: 1000,
+        lastRt: 2000,
+        lastStage: 'street',
+      );
+      api.next = snapshot(now: 3500, accepted: 1, self: me);
+      await c.synchronize();
+      expect(api.sent.length, 1, reason: 'yoklama, gönderim değil');
+      expect(realigned.single.lastRt, 2000);
+      expect(c.realigning, false);
+      // Yerel oyun sunucu durumundan devam eder: yeni 2. şut akar.
+      c.addShot(shot(2, 4000));
+      expect(c.pendingShots, 1);
+      api.next = snapshot(now: 4500, accepted: 2, self: me);
+      await c.synchronize();
+      expect(api.sent.last.single.t, 4000);
+      expect(c.pendingShots, 0);
+      // 409 sequence_gap da aynı yoldan iner (sonsuz tekrar yok).
+      c.addShot(shot(4));
+      api.sendError = const ApiException('sequence_gap', 'Sıra eksik.', 409);
+      await c.synchronize();
+      expect((c.pendingShots, c.realigning), (0, true));
+      // Ağ hatası ise şut korunur ve yeniden denenir.
+      api
+        ..sendError = null
+        ..next = snapshot(now: 5000, accepted: 2, self: me);
+      await c.synchronize();
+      c.addShot(shot(3, 6000));
+      api.failSend = true;
+      await c.synchronize();
+      expect((c.pendingShots, c.connected), (1, false));
+      c.dispose();
+    },
+  );
   test('cancel wins against an in-flight match join', () async {
     final api = FakeApi()..joining = Completer();
     final c = DuelController(userId: 'me', api: api, autoPoll: false);
@@ -292,6 +371,7 @@ void main() {
         'endsAtMs': 92000,
         'shotClockMs': 5000,
         'myAcceptedSeq': 0,
+        'me': {'score': 0, 'shots': 0, 'lastRt': 0, 'lastStage': 'street'},
         'events': [],
         'players': players,
         'ghost': kind == 'ghost'
@@ -324,6 +404,9 @@ void main() {
     expect(s.isGhost, true);
     expect(s.opponentKind, OpponentKind.recorded);
     expect(s.ghostEvents!.map((e) => e.t), [1200, 2800]);
+    // Eski kayıtta rt yok: vuruş anı kabul edilir.
+    expect(s.ghostEvents!.map((e) => e.rt), [1200, 2800]);
+    expect((s.me!.shots, s.me!.fever, s.me!.lastStage), (0, false, 'street'));
     expect(s.opponent('me').ghost, true);
     expect(
       () => DuelSnapshot.fromResponse(resp('live', [human, g])),

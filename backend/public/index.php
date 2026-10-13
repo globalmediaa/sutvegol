@@ -16,7 +16,7 @@ if (str_starts_with($path, '/v1/duels/')) {
     require dirname(__DIR__) . '/src/duels.php';
     $user = current_user();
     try { output(duel_route($method, $path, $user)); }
-    catch (DuelError $e) { fail($e->kind, $e->getMessage(), $e->status); }
+    catch (DuelError $e) { output(['ok' => false, 'error' => ['code' => $e->kind, 'message' => $e->getMessage()] + $e->extra], $e->status); }
     catch (Throwable $e) {
         if (db()->inTransaction()) db()->rollBack();
         error_log('Duel request failed: '.get_class($e));

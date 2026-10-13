@@ -137,6 +137,33 @@ class SutVeGolGame extends FlameGame {
   /// Şut saati yalnız yerel düello oyuncusunda, top beklerken işler.
   bool get shotClockVisible => mode == GameMode.duel && state == GameState.idle;
 
+  /// Sunucu sözleşmesi (`duels.php`): vuruş, önceki şutun sonuçlanmasından
+  /// (rt) en geç 10 sn sonra; sahne geçişinden sonra +4 sn. Yavaş bir sahne
+  /// geçişi bunu aşacaksa şut saati erken dolar (dürüst kayıt reddedilmez).
+  static const int duelShotGapMs = 10000;
+  static const int duelStageGapMs = 4000;
+  static const int duelGapMarginMs = 400;
+
+  /// Oyun saati sunucunun maç saatinden bu kadar geride kalırsa (arka plan,
+  /// kare kaybı) top beklerken ileri alınır; sunucu 12 sn'den eski şutu almaz.
+  static const int duelClockResyncMs = 2500;
+
+  /// Koşu başından geçen oyun süresi (ms): kayıtlardaki `t`/`rt` saati.
+  int get runElapsedMs => ((_clock - _runStartClock) * 1000).round();
+
+  int _lastEventRt = 0;
+  String _lastEventStage = Stage.street.name;
+
+  /// Son kaydın sonuçlanma anı (ms) — şut saati üst sınırının başlangıcı.
+  int get lastEventRt => _lastEventRt;
+
+  bool get _shotGapOverdue {
+    if (mode != GameMode.duel) return false;
+    final limit =
+        duelShotGapMs + (stage.name != _lastEventStage ? duelStageGapMs : 0);
+    return runElapsedMs - _lastEventRt >= limit - duelGapMarginMs;
+  }
+
   late final SceneRoot scene;
   late final Background background;
   late final Ball ball;
@@ -366,7 +393,7 @@ class SutVeGolGame extends FlameGame {
     if (kAutoplay && !isReplica) _autoplay(dt);
     if (shotClockVisible) {
       shotClock -= dt;
-      if (shotClock <= 0) _shotTimeout();
+      if (shotClock <= 0 || _shotGapOverdue) _shotTimeout();
     }
     if (_queue.isEmpty) return;
     final due = _queue.where((s) => s.at <= _clock).toList();
@@ -435,14 +462,92 @@ class SutVeGolGame extends FlameGame {
   }
 
   /// Koşuyu başlatır: hedef gelir, top sahaya girer. Solo'da splash bitince,
-  /// düelloda geri sayım sıfırlanınca (her iki oyun için) çağrılır.
-  void startRun() {
+  /// düelloda geri sayım sıfırlanınca (her iki oyun için) çağrılır. [lateMs]:
+  /// düelloda maçın sunucu saatine göre kaç ms önce başladığı (yoklama gecikmesi);
+  /// koşu saati buna göre başlar, kayıtlardaki `t` maç saatini izler.
+  void startRun({int lateMs = 0}) {
     if (state != GameState.splash) return;
     scene.position = Vector2.zero();
     target.spawn();
     ball.enter();
     _resetRunStats();
+    if (mode == GameMode.duel && lateMs > 0) {
+      _runStartClock = _clock - min(lateMs, 10000) / 1000;
+    }
     onRunStarted?.call();
+  }
+
+  /// Düello: oyun saati maç saatinin (sunucu) [duelClockResyncMs] gerisine
+  /// düştüyse top beklerken koşu saatini ileri alır. Kral Modu kalan süresi de
+  /// aynı kadar azalır (sunucu Kral Modu'nu `rt` ile ölçer). Uzun boşluk
+  /// varsa şut saati hemen dolar; sunucu boşluk sonrası tek timeout'u kabul
+  /// eder. Kaydırılan ms'yi döner.
+  int syncMatchClock(int matchElapsedMs) {
+    if (mode != GameMode.duel || state != GameState.idle) return 0;
+    final lag = matchElapsedMs - runElapsedMs;
+    if (lag < duelClockResyncMs) return 0;
+    _runStartClock -= lag / 1000;
+    if (fever) {
+      feverTime -= lag / 1000;
+      if (feverTime <= 0) endFever();
+    }
+    return lag;
+  }
+
+  /// Düello: sunucu bir şutu reddetti. Sayaçlar, Kral Modu ve sahne sunucunun
+  /// kabul ettiği son duruma döner; sonraki kayıt `shots + 1` numarasıyla ve bu
+  /// durumdan devam eder. Uçmakta olan şut (yerelde zaten sayıldı) korunur.
+  void realignFromServer({
+    required int score,
+    required int shots,
+    required int hits,
+    required int misses,
+    required int streak,
+    required int maxStreak,
+    required int feverHits,
+    required bool fever,
+    required int feverT,
+    required int lastRt,
+    required String lastStage,
+  }) {
+    if (mode != GameMode.duel || state == GameState.gameOver) return;
+    final inFlight = _capture != null;
+    _recordsEmitted = shots;
+    runShots = shots + (inFlight ? 1 : 0);
+    runHits = hits;
+    runMisses = misses;
+    runFeverHits = feverHits;
+    runMaxStreak = maxStreak;
+    this.score = score;
+    final left = fever
+        ? (feverT + feverDuration * 1000 - runElapsedMs) / 1000
+        : 0.0;
+    if (left > 0) {
+      if (!this.fever) startFever();
+      feverTime = left;
+      this.streak = streak;
+    } else {
+      if (this.fever) endFever();
+      // Sunucuda süresi dolmuş Kral Modu: bir sonraki golde seri sıfırdan.
+      this.streak = fever ? 0 : streak;
+    }
+    _lastEventRt = lastRt;
+    _lastEventStage = lastStage;
+    final wanted = Stage.forScore(score);
+    if (wanted != stage) {
+      if (state == GameState.idle) {
+        state = GameState.resolving;
+        input.cancelGesture();
+        ball.hide();
+        _pendingStage = null;
+        _enterStage(wanted);
+      } else {
+        _pendingStage = wanted;
+      }
+    } else {
+      // Reddedilen golün kurduğu sahne geçişi geçersiz; uçan şut gerekirse yeniden kurar.
+      _pendingStage = null;
+    }
   }
 
   void onBallReady() {
@@ -744,9 +849,13 @@ class SutVeGolGame extends FlameGame {
     final c = _capture;
     _capture = null;
     if (c == null || isReplica) return;
+    final rt = c.path == ShotPath.timeout ? c.t : max(c.t, runElapsedMs);
+    _lastEventRt = rt;
+    _lastEventStage = c.stage.name;
     final record = ShotRecord(
       seq: ++_recordsEmitted,
       t: c.t,
+      rt: rt,
       stage: c.stage.name,
       view: c.view.name,
       target: c.target,
@@ -1053,6 +1162,8 @@ class SutVeGolGame extends FlameGame {
     runFeverHits = 0;
     runMaxStreak = 0;
     _recordsEmitted = 0;
+    _lastEventRt = 0;
+    _lastEventStage = stage.name;
     _runStartedAt = DateTime.now();
     _runStartClock = _clock;
   }

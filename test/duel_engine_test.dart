@@ -120,6 +120,7 @@ void main() {
       (false, 0, 0, 1),
     );
     expect(timeout.t, greaterThanOrEqualTo(5000));
+    expect(timeout.rt, timeout.t);
     expect(timeout.consistent, true);
     expect(mine.state, GameState.idle);
     expect(mine.lives, 3); // can yok
@@ -158,10 +159,95 @@ void main() {
       expect(r.mult, expected, reason: 'kayıt ${r.seq}');
       expect(r.score - prev.score, 30 * r.mult);
       expect(r.streak, r.hit ? prev.streak + 1 : 0);
-      expect(r.t - prev.t, lessThanOrEqualTo(10000));
+      // Sunucu sözleşmesi: sonuç vuruştan sonra, şut saati önceki sonuçtan ölçülür.
+      expect(r.rt, inInclusiveRange(r.t, r.t + 5000), reason: 'kayıt ${r.seq}');
+      expect(r.t, greaterThanOrEqualTo(prev.rt));
+      expect(r.t - prev.rt, lessThanOrEqualTo(10000));
     }
     mine.finishRun();
     replica.finishRun();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('match clock resync and server realign keep the contract', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'sound': false});
+    Sfx.skipInit = true;
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final mine = SutVeGolGame(mode: GameMode.duel, seed: 11);
+    final records = <ShotRecord>[];
+    mine.onShotResolved = records.add;
+    await tester.runAsync(() async {
+      await tester.pumpWidget(MaterialApp(home: GameWidget(game: mine)));
+      await mine.loaded;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    // Yoklama gecikmesi: maç 1,2 sn önce başlamıştı; koşu saati oradan başlar.
+    mine.startRun(lateMs: 1200);
+    expect(mine.runElapsedMs, inInclusiveRange(1200, 1210));
+    for (var i = 0; i < 50; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(mine.state, GameState.idle);
+    // Küçük sapma kaydırılmaz.
+    expect(mine.syncMatchClock(mine.runElapsedMs + 1000), 0);
+    // 20 sn arka plan: oyun saati durdu, maç sürdü. Saat ileri alınır ve şut
+    // saati hemen dolar (sunucu: 12 sn'den eski t yok, boşluk sonrası tek timeout).
+    final before = mine.runElapsedMs;
+    expect(mine.syncMatchClock(before + 20000), 20000);
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(records.length, 1);
+    final gap = records.single;
+    expect((gap.path, gap.seq, gap.rt), (ShotPath.timeout, 1, gap.t));
+    expect(gap.t, greaterThanOrEqualTo(before + 20000));
+    expect(mine.lastEventRt, gap.rt);
+
+    // Sunucu bir şutu reddetti: sayaçlar sunucunun durumuna döner. Kral Modu
+    // sunucuda rt=now-9000'de başladı → yerelde 1 sn kaldı.
+    final now = mine.runElapsedMs;
+    mine.realignFromServer(
+      score: 270,
+      shots: 5,
+      hits: 5,
+      misses: 0,
+      streak: 5,
+      maxStreak: 5,
+      feverHits: 0,
+      fever: true,
+      feverT: now - 9000,
+      lastRt: now - 500,
+      lastStage: 'street',
+    );
+    expect(
+      (mine.score, mine.runShots, mine.streak, mine.fever),
+      (270, 5, 5, true),
+    );
+    expect(mine.feverTime, closeTo(1.0, 0.05));
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(
+      (mine.fever, mine.streak),
+      (false, 0),
+    ); // süre sonuçlanma saatinde doldu
+    for (var i = 0; i < 300 && records.length < 2; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(records.length, 2);
+    final next = records.last;
+    expect(
+      (next.seq, next.shots, next.hits, next.misses, next.score, next.streak),
+      (6, 6, 5, 1, 270, 0),
+    );
+    expect(next.t - (now - 500), greaterThanOrEqualTo(4700));
+    expect(next.consistent, true);
+    mine.finishRun();
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(tester.takeException(), isNull);

@@ -34,7 +34,8 @@ class Duels(unittest.TestCase):
         s,r=self.s.post('/v1/duels/queue',Q,b['token']); self.assertEqual(s,200)
         match=r['duel']; id=match['id']
         ra=self.s.get('/v1/duels/'+id,a['token'])[1]['duel']
-        mysql(f"UPDATE duels SET starts_at_ms=UNIX_TIMESTAMP(NOW(3))*1000-30000,ends_at_ms=UNIX_TIMESTAMP(NOW(3))*1000+60000 WHERE id='{id}'")
+        # Maçın 9. sn'si: test olayları (t ≤ 8,5 sn) ne gelecekte ne 12 sn'den eski.
+        mysql(f"UPDATE duels SET starts_at_ms=UNIX_TIMESTAMP(NOW(3))*1000-9000,ends_at_ms=UNIX_TIMESTAMP(NOW(3))*1000+81000 WHERE id='{id}'")
         return id,ra['nonce'],match['nonce']
 
     def test_01_event_integrity_and_result(self):
@@ -49,10 +50,12 @@ class Duels(unittest.TestCase):
         self.assertEqual(self.s.post(path+'/events',dict(nonce=na,events=[event]),self.a['token'])[0],200)
         changed=copy.deepcopy(event); changed['power']=.7
         self.assertEqual(self.s.post(path+'/events',dict(nonce=na,events=[changed]),self.a['token'])[1]['error']['code'],'event_conflict')
-        # One invalid item rolls back the entire batch; no partial score.
+        # A rejected item keeps the valid prefix (client drops the rejected shot and realigns);
+        # nothing after the rejected item is stored.
         bad3=shot(3); bad3['score']=900
-        self.assertEqual(self.s.post(path+'/events',dict(nonce=na,events=[shot(2),bad3]),self.a['token'])[0],422)
-        self.assertEqual(self.s.get(path,self.a['token'])[1]['duel']['myAcceptedSeq'],1)
+        s,r=self.s.post(path+'/events',dict(nonce=na,events=[shot(2),bad3,shot(4)]),self.a['token'])
+        self.assertEqual((s,r['error']['seq'],r['error']['acceptedSeq']),(422,3,2))
+        self.assertEqual(self.s.get(path,self.a['token'])[1]['duel']['myAcceptedSeq'],2)
         self.assertEqual(self.s.post(path+'/events',dict(nonce=na,events=[shot(2),shot(3)]),self.a['token'])[0],200)
         events=self.s.get(path+'?since=1',self.b['token'])[1]['duel']['events']
         self.assertEqual([x['seq'] for x in events],[2,3])

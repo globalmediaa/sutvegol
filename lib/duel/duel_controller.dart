@@ -52,6 +52,15 @@ class DuelController extends ChangeNotifier {
   Completer<void>? _syncDone;
   final List<ShotRecord> _outbox = [];
   void Function(ShotRecord)? onRemoteShot;
+
+  /// Sunucu bir şutu reddetti (422): yerel oyun sayaçlarını sunucunun kabul
+  /// ettiği duruma döndürür; sonraki şutlar bu durumdan devam eder.
+  void Function(DuelSelfState state)? onRealign;
+
+  /// Reddedilen (ve onu izleyen, artık geçersiz zincirdeki) şut sayısı.
+  int rejectedShots = 0;
+  bool _realignPending = false, _fastRetry = false;
+  bool get realigning => _realignPending;
   int get pendingShots => _outbox.length;
   int get serverNow => _now() + _offset;
   int get secondsLeft => snapshot == null
@@ -63,6 +72,10 @@ class DuelController extends ChangeNotifier {
   int get countdown => snapshot == null
       ? 0
       : max(0, ((snapshot!.startsAt - serverNow) / 1000).ceil());
+
+  /// Sunucu saatine göre maç başından geçen ms (eşleşme yoksa null).
+  int? get matchElapsedMs =>
+      snapshot == null ? null : serverNow - snapshot!.startsAt;
 
   /// Kuyrukta geçen süre (lobi: "15 sn içinde canlı rakip yoksa…").
   int get searchElapsedMs =>
@@ -110,6 +123,9 @@ class DuelController extends ChangeNotifier {
   void addShot(ShotRecord shot) {
     if (_disposed ||
         terminal ||
+        // Ret sonrası yeniden hizalanana dek gelen şutlar eski (reddedilmiş)
+        // zincirin devamıdır; sunucu durumundan yeniden numaralanacak.
+        _realignPending ||
         _outbox.any((s) => s.seq == shot.seq) ||
         shot.seq <= (snapshot?.acceptedSeq ?? 0)) {
       return;
@@ -157,6 +173,11 @@ class DuelController extends ChangeNotifier {
       _startGhostTimer();
     }
     _outbox.removeWhere((e) => e.seq <= s.acceptedSeq);
+    if (_realignPending) {
+      _realignPending = false;
+      final me = s.me;
+      if (me != null) onRealign?.call(me);
+    }
     for (final e in s.events) {
       if (e.seq <= lastReceivedSeq) continue;
       onRemoteShot?.call(e);
@@ -228,6 +249,7 @@ class DuelController extends ChangeNotifier {
     _busy = true;
     _syncDone = Completer<void>();
     final epoch = _epoch;
+    var sending = false;
     try {
       final began = _now();
       final s = snapshot;
@@ -237,6 +259,7 @@ class DuelController extends ChangeNotifier {
             ? await api.poll(initialDuelId!, 0, withGhost: true)
             : await api.queue();
       } else if (_outbox.isNotEmpty) {
+        sending = true;
         next = await api.send(
           s.id,
           s.nonce,
@@ -260,6 +283,23 @@ class DuelController extends ChangeNotifier {
       error = null;
     } catch (e) {
       if (_disposed || epoch != _epoch) return;
+      if (sending &&
+          e is ApiException &&
+          (e.status == 422 ||
+              ['sequence_gap', 'event_conflict'].contains(e.code))) {
+        // Sunucu bir şutu reddetti (shot_clock, score_math, invalid_timing…).
+        // Önündeki geçerli şutlar kaydedildi; reddedilen ve sonrakiler eski
+        // zincirde kaldı. Paketi tekrar göndermek sonsuza dek aynı reddi
+        // alır: düşür, hemen yokla, gelen `me` durumuyla yerel oyunu hizala.
+        rejectedShots += _outbox.length;
+        _outbox.clear();
+        _realignPending = true;
+        _fastRetry = true;
+        connected = true;
+        _errors = 0;
+        error = null;
+        return;
+      }
       connected = false;
       _errors++;
       error = e is ApiException
@@ -292,8 +332,12 @@ class DuelController extends ChangeNotifier {
       if (!_disposed && epoch == _epoch) {
         _refreshPhase();
         _notify();
+        final fast = _fastRetry;
+        _fastRetry = false;
         if (autoPoll && !suspended && !terminal && phase != DuelPhase.error) {
-          final delay = _errors == 0
+          final delay = fast
+              ? Duration.zero
+              : _errors == 0
               ? pollInterval
               : Duration(seconds: min(8, 1 << min(_errors, 3)));
           _timer = Timer(delay, synchronize);

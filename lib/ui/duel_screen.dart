@@ -52,6 +52,20 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
         _pending.add(e);
       }
     };
+    // Sunucu bir şutu reddederse yerel sayaçlar sunucunun kabul ettiği duruma döner.
+    _c.onRealign = (m) => _mine?.realignFromServer(
+      score: m.score,
+      shots: m.shots,
+      hits: m.hits,
+      misses: m.misses,
+      streak: m.streak,
+      maxStreak: m.maxStreak,
+      feverHits: m.feverHits,
+      fever: m.fever,
+      feverT: m.feverT,
+      lastRt: m.lastRt,
+      lastStage: m.lastStage,
+    );
     _clock = Timer.periodic(const Duration(seconds: 1), (_) => _c.tick());
     scheduleMicrotask(() {
       if (mounted) _c.start();
@@ -110,12 +124,18 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     if (!_loaded) return;
     if (!_started && [DuelPhase.live, DuelPhase.settling].contains(_c.phase)) {
       _started = true;
-      _mine!.startRun();
+      // Koşu saati maç saatiyle (sunucu) başlar: yoklama gecikmesi t'ye eklenir.
+      _mine!.startRun(lateMs: _c.matchElapsedMs ?? 0);
       _replica!.startRun();
       for (final e in _pending) {
         _replica!.applyRemoteShot(e);
       }
       _pending.clear();
+    }
+    final elapsed = _c.matchElapsedMs;
+    if (_started && _c.phase == DuelPhase.live && elapsed != null) {
+      // Arka plan / kare kaybı sonrası oyun saati maç saatine yetişir.
+      _mine!.syncMatchClock(elapsed);
     }
     if ([
       DuelPhase.settling,
@@ -159,6 +179,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     _clock?.cancel();
     _c.removeListener(_changed);
     _c.onRemoteShot = null;
+    _c.onRealign = null;
     if (!_c.terminal) {
       unawaited(_c.leave());
     }

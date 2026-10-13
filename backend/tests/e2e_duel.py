@@ -65,10 +65,11 @@ class Player:
         while self.server_now() < starts:
             time.sleep(.2)
         def schedule():
-            # %8 ihtimalle oyuncu hiç şut atmaz: istemci t = son şut + 5 sn'de otomatik ıskalar.
+            # %8 ihtimalle oyuncu hiç şut atmaz: istemci önceki sonuç (rt) + 5 sn'de otomatik ıskalar.
             if rng.random() < .08:
-                return self.run.t + 5050, True
-            return self.run.t + rng.uniform(1300, 3000), False
+                return self.run.rt + 5050, True
+            # Kayıt sonucun işlendiği anda (rt) çıkar: vuruş 1 sn önce, yeni top ≥0,7 sn sonra.
+            return self.run.rt + 1000 + rng.uniform(700, 2000), False
         next_shot, timeout = schedule()
         while True:
             elapsed = self.server_now() - starts
@@ -76,10 +77,10 @@ class Player:
                 break
             if elapsed >= next_shot and elapsed < 89000:
                 if timeout:
-                    e = self.run.event(timeout=True, dt=5050)
+                    e = self.run.event(timeout=True, dt=int(elapsed) - self.run.t)
                     self.timeouts += 1
                 else:
-                    e = self.run.event(hit=rng.random() < hit_rate, dt=max(400, int(elapsed) - self.run.t))
+                    e = self.run.event(hit=rng.random() < hit_rate, dt=int(elapsed) - 1000 - self.run.t, resolve=1000)
                 self.outbox.append(e)
                 next_shot, timeout = schedule()
             since = self.received[-1]['seq'] if self.received else 0

@@ -8,6 +8,11 @@ declare(strict_types=1);
  * Kuyrukta 15 sn canlı rakip yoksa gerçek bir oyuncunun bitmiş koşusuna (ghost, "Kayıtlı
  * rakip") karşı oynanır; havuz boşsa açıkça etiketli CPU koşusu üretilir. Canlı maçlar
  * Glicko-2 rating'e sayılır, ghost maçları yalnız XP verir.
+ *
+ * Zaman alanları (koşu başından ms, istemcinin oyun saati): `t` vuruş (ya da şut saati
+ * ıskası) anı, `rt` sonucun skora işlendiği an (top fileye/yere düşüp sayıldığında). Kral
+ * Modu kararları istemcideki gibi `rt` ile verilir; şut saati bir önceki şutun `rt`'sinden
+ * ölçülür. Böylece direk sekmesi gibi uzun sonuçlanmalar dürüst oyuncuyu reddettirmez.
  */
 
 const DUEL_VERSION = 2;
@@ -15,16 +20,24 @@ const DUEL_SECONDS = 90;
 const DUEL_GRACE_MS = 8000;
 const DUEL_COUNTDOWN_MS = 6000;
 const DUEL_SHOT_CLOCK_MS = 5000;
-/** Bir şutun atılışından sonraki topun hazır olmasına kadar geçen en uzun süre (uçuş, düşüş, yeni top, sahne geçişi). */
+/** Önceki şutun sonuçlanmasından (rt) yeni topun hazır olmasına kadar pay (yeni top 0,7 sn). */
 const DUEL_CYCLE_TOLERANCE_MS = 5000;
+/** Sahne geçişinde (arka plan üretimi + 1,2 sn afiş) şut saati sınırına eklenen pay. */
+const DUEL_STAGE_TOLERANCE_MS = 4000;
+/** Vuruştan sonucun işlenmesine kadar en uzun süre (uçuş ≤0,68 + direk düşüşü + 0,45 sn). */
+const DUEL_RESOLVE_MAX_MS = 5000;
+/** Bir şut sunucuya en geç bu kadar eski bir `t` ile ulaşabilir (geriye dönük koşu üretimi yok). */
+const DUEL_MAX_LAG_MS = 12000;
+/** Makullük tavanı: n. şut t ≥ (n-1) × 1,5 sn (dürüst en hızlı döngü ≈ 1,7 sn). */
+const DUEL_SHOT_RATE_MS = 1500;
 const DUEL_MIN_GAP_MS = 350;
 const DUEL_GOAL_POINTS = 30;
 const DUEL_MAX_MULT = 3;
 const DUEL_FEVER_MULT = 2;
 const DUEL_FEVER_STREAK = 5;
 const DUEL_FEVER_MS = 10000;
-/** Kral Modu atılış zamanına göre değil sonuçlanma anına göre işler; sonuçlanma gecikmesi payı. */
-const DUEL_FEVER_TOLERANCE_MS = 2000;
+/** Kral Modu `rt` (sonuçlanma anı) ile işler; yalnız ms yuvarlaması / kare adımı payı. */
+const DUEL_FEVER_TOLERANCE_MS = 100;
 const DUEL_GHOST_AFTER_MS = 15000;
 const DUEL_REMATCH_MS = 10000;
 const DUEL_STALE_MS = 15000;
@@ -35,7 +48,8 @@ const DUEL_GHOST_ID = 'ghost';
 const DUEL_UPDATE_MESSAGE = 'Düello yenilendi. Oynamak için uygulamayı güncelle.';
 
 final class DuelError extends RuntimeException {
-    public function __construct(public string $kind, string $message, public int $status = 422) {
+    /** @param array $extra hata gövdesine eklenen alanlar (ör. reddedilen `seq`, `acceptedSeq`). */
+    public function __construct(public string $kind, string $message, public int $status = 422, public array $extra = []) {
         parent::__construct($message);
     }
 }
@@ -72,10 +86,12 @@ function duel_initial_state(): array {
 }
 
 /**
- * Bir olaydan sonra geçerli olabilecek durumlar (saf fonksiyon). Kral Modu sonuçlanma anında
- * bittiği için süre sınırına yakın bir golde iki sonuç da (x2 sürüyor / bitti, seri sıfır) geçerlidir.
+ * Bir olaydan sonra geçerli olabilecek durumlar (saf fonksiyon). `$rt` sonucun işlendiği an;
+ * Kral Modu da bu anda başlar/biter. Sınırın ±100 ms içindeki golde iki sonuç da (x2 sürüyor /
+ * bitti, seri sıfır) geçerlidir.
  */
-function duel_candidates(array $s, bool $hit, int $t): array {
+function duel_candidates(array $s, bool $hit, int $rt): array {
+    $t = $rt;
     $n = $s; $n['shots'] = (int)$s['shots'] + 1;
     if (!$hit) {
         $n['misses'] = (int)$s['misses'] + 1;
@@ -106,24 +122,40 @@ function duel_candidates(array $s, bool $hit, int $t): array {
     return $out;
 }
 
-/** Şema, sıra, şut saati ve skor/combo geçişini doğrular; kalıcı yazılacak yeni durumu döner. */
+/**
+ * Şema, sıra, zaman, şut saati ve skor/combo geçişini doğrular; kalıcı yazılacak yeni durumu döner.
+ * `$p`: oyuncunun kayıtlı durumu; isteğe bağlı `last_rt_ms`, `last_path`, `last_stage` son olaydan.
+ * `$elapsedNow`: sunucu saatine göre maç başından geçen ms.
+ */
 function duel_validate_event(array $e, array $p, int $elapsedNow): array {
     duel_require(($e['v'] ?? null) === DUEL_VERSION, 'update_required', DUEL_UPDATE_MESSAGE, 426);
     $seq = duel_integer($e['seq'] ?? null, 1, 300, 'seq');
     duel_require($seq === (int)$p['shots'] + 1, 'sequence_gap', 'Şut sırası eksik; bekleyen şutları yeniden gönder.', 409);
     $t = duel_integer($e['t'] ?? null, 0, DUEL_SECONDS * 1000 - 1, 't');
+    $rt = duel_integer($e['rt'] ?? null, $t, $t + DUEL_RESOLVE_MAX_MS, 'rt');
     $first = (int)$p['shots'] === 0;
-    $last = $first ? 0 : (int)$p['last_shot_ms'];
-    duel_require($t <= $elapsedNow + 1000 && ($first || $t >= $last + DUEL_MIN_GAP_MS), 'invalid_timing', 'Şut zamanı geçersiz.');
+    $lastRt = $first ? 0 : (int)($p['last_rt_ms'] ?? $p['last_shot_ms']);
+    $lastPath = $first ? null : ($p['last_path'] ?? null);
     $path = $e['path'] ?? null;
     duel_require(in_array($path, ['net','keeper','post','out','timeout'], true), 'invalid_event', 'Şut yolu geçersiz.');
-    duel_require($t - $last <= DUEL_SHOT_CLOCK_MS + DUEL_CYCLE_TOLERANCE_MS, 'shot_clock', 'Şut saati aşıldı.');
+    duel_require($t <= $elapsedNow + 1000 && $rt <= $elapsedNow + 1000, 'invalid_timing', 'Şut zamanı geçersiz.');
+    // Alt sınır: olay geç ulaşabilir (ağ, toplu gönderim) ama geriye dönük koşu yazılamaz.
+    duel_require($t >= $elapsedNow - DUEL_MAX_LAG_MS, 'invalid_timing', 'Şut sunucuya çok geç ulaştı.');
+    // Yeni vuruş önceki sonuç işlendikten sonra (yeni top ≥0,6 sn); şut saati ıskasının ardından top zaten hazırdır.
+    duel_require($t >= $lastRt + ($first || $lastPath === 'timeout' ? 0 : DUEL_MIN_GAP_MS), 'invalid_timing', 'Şut zamanı geçersiz.');
+    duel_require($seq <= intdiv($t, DUEL_SHOT_RATE_MS) + 1, 'invalid_timing', 'Süreye göre çok fazla şut.');
     duel_require(is_bool($e['hit'] ?? null) && is_bool($e['fever'] ?? null), 'invalid_event', 'Şut sonucu geçersiz.');
+    $stage = duel_stage_for((int)$p['score']);
     if ($path === 'timeout') {
-        duel_require($e['hit'] === false && $t - $last >= DUEL_SHOT_CLOCK_MS - 300, 'shot_clock', 'Şut saati dolmadan süre ıskası gönderildi.');
+        // Iskalama cezadır; uzun boşluk (arka plan, yeniden hizalama) sonrası tek timeout kabul edilir.
+        duel_require($e['hit'] === false && $t - $lastRt >= DUEL_SHOT_CLOCK_MS - 300, 'shot_clock', 'Şut saati dolmadan süre ıskası gönderildi.');
+    } else {
+        $stageChanged = !$first && ($p['last_stage'] ?? $stage) !== $stage;
+        $limit = DUEL_SHOT_CLOCK_MS + DUEL_CYCLE_TOLERANCE_MS + ($stageChanged ? DUEL_STAGE_TOLERANCE_MS : 0);
+        duel_require($t - $lastRt <= $limit, 'shot_clock', 'Şut saati aşıldı.');
     }
     duel_require(!($e['hit'] && $path === 'out'), 'score_math', 'Auta giden şut gol olamaz.');
-    duel_require(($e['stage'] ?? null) === duel_stage_for((int)$p['score']) && ($e['view'] ?? null) === 'wide', 'invalid_event', 'Saha durumu geçersiz.');
+    duel_require(($e['stage'] ?? null) === $stage && ($e['view'] ?? null) === 'wide', 'invalid_event', 'Saha durumu geçersiz.');
     if (($e['target'] ?? null) !== null) duel_vector($e['target'], 'target');
     duel_vector($e['chord'] ?? null, 'chord', 6000);
     duel_vector($e['end'] ?? null, 'end');
@@ -138,15 +170,34 @@ function duel_validate_event(array $e, array $p, int $elapsedNow): array {
         duel_integer($e[$name] ?? null, 0, $name === 'score' ? 60000 : ($name === 'mult' ? DUEL_MAX_MULT : 300), $name);
     }
     duel_require($e['shots'] === $seq, 'score_math', 'Şut sayacı eşleşmedi.');
-    foreach (duel_candidates($p, $e['hit'], $t) as $c) {
+    foreach (duel_candidates($p, $e['hit'], $rt) as $c) {
         if ($e['score'] === $c['score'] && $e['hits'] === $c['hits'] && $e['misses'] === $c['misses']
             && $e['streak'] === $c['streak'] && $e['maxStreak'] === $c['max_streak'] && $e['feverHits'] === $c['fever_hits']
             && $e['mult'] === $c['mult'] && $e['fever'] === (bool)$c['fever']) {
             $c['last_shot_ms'] = $t;
+            $c['last_rt_ms'] = $rt; $c['last_path'] = $path; $c['last_stage'] = $stage;
             return $c;
         }
     }
     throw new DuelError('score_math', 'Skor veya combo eşleşmedi.');
+}
+
+/** Oyuncunun `seq` numaralı kayıtlı olayı (yoksa null). */
+function duel_event_payload(string $id, int $user, int $seq): ?array {
+    if ($seq < 1) return null;
+    $raw = duel_query('SELECT payload FROM duel_events WHERE duel_id=? AND user_id=? AND seq=?', [$id, $user, $seq])->fetchColumn();
+    $e = $raw === false ? null : json_decode((string)$raw, true);
+    return is_array($e) ? $e : null;
+}
+
+/** Doğrulamanın ihtiyaç duyduğu son olay bilgisi (rt, yol, sahne). */
+function duel_with_last_event(array $p, ?array $last): array {
+    if ($last) {
+        $p['last_rt_ms'] = is_int($last['rt'] ?? null) ? $last['rt'] : (int)$p['last_shot_ms'];
+        $p['last_path'] = $last['path'] ?? null;
+        $p['last_stage'] = $last['stage'] ?? null;
+    }
+    return $p;
 }
 
 /** Kayıtlı koşunun belirli bir andaki (ms) durumu. */
@@ -170,19 +221,20 @@ function duel_cpu_run(int $seed): array {
         $t += 1600 + (int)($rand() * 2600);
         if ($t >= DUEL_SECONDS * 1000 - 1500) break;
         $hit = $rand() < 0.62;
-        $cands = duel_candidates($state, $hit, $t);
-        $next = (count($cands) > 1 && $t >= (int)$state['fever_t'] + DUEL_FEVER_MS) ? $cands[1] : $cands[0];
+        $rt = $t + 1000;
+        $cands = duel_candidates($state, $hit, $rt);
+        $next = (count($cands) > 1 && $rt >= (int)$state['fever_t'] + DUEL_FEVER_MS) ? $cands[1] : $cands[0];
         $tx = 480 + $rand() * 380; $ty = 1370 + $rand() * 190;
         $aim = $hit ? [$tx, $ty] : [$rand() < .5 ? 300.0 : 1030.0, 1576.0];
         $events[] = [
-            'v'=>DUEL_VERSION,'seq'=>++$seq,'t'=>$t,'stage'=>duel_stage_for((int)$state['score']),'view'=>'wide',
+            'v'=>DUEL_VERSION,'seq'=>++$seq,'t'=>$t,'rt'=>$rt,'stage'=>duel_stage_for((int)$state['score']),'view'=>'wide',
             'target'=>[round($tx, 2), round($ty, 2)],
             'chord'=>[round(($aim[0] - 665) * 0.4, 2), round(($trackEndY - 2323) * 0.4, 2)],
             'dev'=>0,'tMax'=>0.5,'power'=>round(max(0.0, min(1.0, ($trackEndY - $aim[1]) / (346 * 1.15))), 3),
             'keeper'=>[null, null],'path'=>$hit ? 'net' : 'out','hit'=>$hit,
             'end'=>[round($aim[0], 2), round($aim[1], 2)],'drop'=>null,
             'score'=>$next['score'],'streak'=>$next['streak'],'fever'=>(bool)$next['fever'],
-            'feverLeft'=>$next['fever'] ? round(max(0, min(10, ((int)$next['fever_t'] + DUEL_FEVER_MS - $t) / 1000)), 2) : 0,
+            'feverLeft'=>$next['fever'] ? round(max(0, min(10, ((int)$next['fever_t'] + DUEL_FEVER_MS - $rt) / 1000)), 2) : 0,
             'shots'=>$next['shots'],'hits'=>$next['hits'],'misses'=>$next['misses'],
             'feverHits'=>$next['fever_hits'],'maxStreak'=>$next['max_streak'],'mult'=>$next['mult'],
         ];
@@ -192,12 +244,14 @@ function duel_cpu_run(int $seed): array {
 }
 
 /**
- * Ghost kaynağı: başka bir oyuncunun bitmiş, hükmen olmayan gerçek v2 koşusu. Benzer rating ve
- * yakın tarih öne alınır; en iyi 5 adaydan biri rastgele seçilir. Kendi koşusu asla seçilmez.
+ * Ghost kaynağı: başka bir oyuncunun bitmiş, hükmen olmayan, tam süreli gerçek v2 koşusu (maç
+ * süre/tamamlanma ile bitti ya da son şutu ≥ 60. sn; rakip erken çekildiyse yarım koşu seçilmez).
+ * Benzer rating ve yakın tarih öne alınır; en iyi 5 adaydan biri rastgele seçilir. Kendi koşusu asla.
  */
 function duel_pick_ghost_source(int $user, float $rating): ?array {
     $rows = duel_query('SELECT p.duel_id,p.user_id FROM duel_players p JOIN duels d ON d.id=p.duel_id JOIN users u ON u.id=p.user_id LEFT JOIN duel_ratings r ON r.user_id=p.user_id
         WHERE d.version>=2 AND d.status="finished" AND d.created_at>=DATE_SUB(NOW(),INTERVAL 30 DAY) AND p.user_id<>? AND p.forfeited=0 AND p.shots>=3
+          AND (d.reason IN ("completed","time") OR p.last_shot_ms>=60000)
           AND u.status="active" AND u.username IS NOT NULL
         ORDER BY ABS(COALESCE(r.rating,1500)-?) + TIMESTAMPDIFF(HOUR,d.created_at,NOW())*2, d.created_at DESC LIMIT 5', [$user, $rating])->fetchAll();
     shuffle($rows);
@@ -269,7 +323,10 @@ function duel_lock_match(string $id, int $user): array {
     return [$duel, $players];
 }
 
-/** XP her maçta, rating yalnız iki tarafın da gerçek olduğu canlı maçta (en az biri hükmen değilse). */
+/**
+ * XP her maçta; rating yalnız iki tarafın da gerçek olduğu canlı maçta, en az biri hükmen değilse ve
+ * iki taraf da en az bir şut kaydettiyse (geri sayımda / şut atmadan çekilme rating'li galibiyet vermez).
+ */
 function duel_apply_rewards(array $duel, array &$players, ?int $winner, bool $draw): void {
     $ids = array_map(fn($p) => (int)$p['user_id'], $players); sort($ids);
     $rows = [];
@@ -278,7 +335,8 @@ function duel_apply_rewards(array $duel, array &$players, ?int $winner, bool $dr
         $rows[$uid] = duel_query('SELECT * FROM duel_ratings WHERE user_id=? FOR UPDATE', [$uid])->fetch();
     }
     $counted = $duel['kind'] === 'live' && count($players) === 2
-        && count(array_filter($players, fn($p) => !(int)$p['forfeited'])) > 0;
+        && count(array_filter($players, fn($p) => !(int)$p['forfeited'])) > 0
+        && count(array_filter($players, fn($p) => (int)$p['shots'] > 0)) === 2;
     $next = [];
     foreach ($players as $p) {
         $uid = (int)$p['user_id']; $won = $winner === $uid;
@@ -400,11 +458,17 @@ function duel_snapshot(string $id, int $user, int $since = 0, bool $withGhost = 
             $rematch = ['expiresAtMs'=>(int)$d['finished_at_ms'] + DUEL_REMATCH_MS,'mine'=>(bool)(int)$mine['rematch'],'theirs'=>(bool)(int)$other['rematch'],
                 'duelId'=>duel_query('SELECT id FROM duels WHERE rematch_of=?', [$id])->fetchColumn() ?: null];
         }
+        // Yerel oyunun sayaçlarını sunucuya yeniden hizalaması için (reddedilen şut sonrası).
+        $last = duel_event_payload($id, $user, (int)$mine['shots']);
+        $me = ['score'=>(int)$mine['score'],'shots'=>(int)$mine['shots'],'hits'=>(int)$mine['hits'],'misses'=>(int)($mine['misses'] ?? 0),
+            'streak'=>(int)($mine['streak'] ?? 0),'maxStreak'=>(int)$mine['max_streak'],'feverHits'=>(int)($mine['fever_hits'] ?? 0),
+            'fever'=>(bool)(int)($mine['fever'] ?? 0),'feverT'=>(int)($mine['fever_t'] ?? 0),'lastT'=>(int)($mine['last_shot_ms'] ?? 0),
+            'lastRt'=>is_int($last['rt'] ?? null) ? $last['rt'] : (int)($mine['last_shot_ms'] ?? 0),'lastStage'=>$last['stage'] ?? 'street'];
         return ['ok'=>true,'serverNowMs'=>$now,'duel'=>[
             'id'=>$id,'version'=>(int)($d['version'] ?? 1),'kind'=>$d['kind'] ?? 'live','seed'=>(int)$d['seed'],'nonce'=>$mine['nonce'],
             'status'=>$finished ? 'finished' : ($now < $starts ? 'countdown' : 'live'),
             'startsAtMs'=>$starts,'endsAtMs'=>(int)$d['ends_at_ms'],'shotClockMs'=>DUEL_SHOT_CLOCK_MS,
-            'players'=>$out,'myAcceptedSeq'=>(int)$mine['shots'],
+            'players'=>$out,'myAcceptedSeq'=>(int)$mine['shots'],'me'=>$me,
             'events'=>array_map(fn($e) => json_decode($e['payload'], true), $events),
             'ghost'=>$ghostInfo,
             'result'=>$finished ? ['winnerId'=>$winnerId,'draw'=>$draw,'reason'=>$d['reason'],
@@ -441,13 +505,21 @@ function duel_create_ghost(int $user, float $rating, int $now): string {
     return $id;
 }
 
-function duel_queue(int $user): array {
-    // A named lock serializes pairing without requiring SKIP LOCKED on older MariaDB.
+/**
+ * Maç açan her yol (kuyruk eşleşmesi, ghost, rövanş) aynı adlandırılmış kilidi alır: bir oyuncu
+ * aynı anda iki aktif maça giremez. Older MariaDB'de SKIP LOCKED gerektirmez.
+ */
+function duel_with_match_lock(callable $action): mixed {
     $lock = 'svduel_'.substr(hash('sha256', (string)envv('DB_DSN')), 0, 40);
     duel_require((int)duel_query('SELECT GET_LOCK(?,3)', [$lock])->fetchColumn() === 1, 'busy', 'Eşleşme yoğun; yeniden dene.', 503);
+    try { return $action(); }
+    finally { duel_query('SELECT RELEASE_LOCK(?)', [$lock]); }
+}
+
+function duel_queue(int $user): array {
     $waited = 0;
-    try {
-        $id = duel_transaction(function () use ($user, &$waited) {
+    $id = duel_with_match_lock(function () use ($user, &$waited) {
+        return duel_transaction(function () use ($user, &$waited) {
             $now = duel_now();
             $active = duel_query('SELECT d.* FROM duels d JOIN duel_players p ON p.duel_id=d.id WHERE p.user_id=? AND d.status="active" ORDER BY d.created_at DESC LIMIT 1', [$user])->fetch();
             if ($active) {
@@ -469,13 +541,14 @@ function duel_queue(int $user): array {
             if ($waited >= DUEL_GHOST_AFTER_MS) return duel_create_ghost($user, $mine, $now);
             return null;
         });
-    } finally { duel_query('SELECT RELEASE_LOCK(?)', [$lock]); }
+    });
     return $id ? duel_snapshot($id, $user, 0, true)
         : ['ok'=>true,'status'=>'waiting','serverNowMs'=>duel_now(),'waitedMs'=>$waited,'ghostAfterMs'=>DUEL_GHOST_AFTER_MS];
 }
 
 function duel_rematch(string $id, int $user): array {
-    duel_transaction(function () use ($id, $user) {
+    // Rövanş da maç açar: kuyruk eşleşmesiyle aynı kilit (A yeni rakiple eşleşirken B'nin rövanşı).
+    duel_with_match_lock(fn() => duel_transaction(function () use ($id, $user) {
         [$d, $players] = duel_lock_match($id, $user); $now = duel_now();
         duel_resolve($d, $players, $now);
         duel_require($d['status'] === 'finished' && $d['kind'] === 'live' && (int)$d['version'] >= 2, 'rematch_unavailable', 'Bu maç için rövanş yok.', 409);
@@ -487,7 +560,7 @@ function duel_rematch(string $id, int $user): array {
         $busy = (int)duel_query('SELECT COUNT(*) FROM duel_players p JOIN duels x ON x.id=p.duel_id WHERE p.user_id IN (?,?) AND x.status="active"', [$user, $other['user_id']])->fetchColumn();
         duel_require(!$busy && $other['user_status'] === 'active', 'rematch_unavailable', 'Rakibin başka bir maça geçti.', 409);
         duel_create_live([(int)$players[0]['user_id'], (int)$players[1]['user_id']], $now, $id);
-    });
+    }));
     return duel_snapshot($id, $user);
 }
 
@@ -530,7 +603,7 @@ function duel_route(string $method, string $path, array $user): array {
     if ($method === 'POST' && $action === 'rematch') return duel_rematch($id, $uid);
     duel_require($method === 'POST' && in_array($action, ['events','finish'], true), 'not_found', 'Uç nokta bulunamadı.', 404);
     $data = body();
-    duel_transaction(function () use ($id, $uid, $action, $data) {
+    $rejected = duel_transaction(function () use ($id, $uid, $action, $data) {
         [$d, $players] = duel_lock_match($id, $uid); $now = duel_now();
         $p = array_values(array_filter($players, fn($p) => (int)$p['user_id'] === $uid))[0];
         duel_require(is_string($data['nonce'] ?? null) && hash_equals($p['nonce'], $data['nonce']), 'invalid_nonce', 'Düello kimliği eşleşmedi.', 403);
@@ -541,19 +614,27 @@ function duel_route(string $method, string $path, array $user): array {
             duel_require((int)($d['version'] ?? 1) >= DUEL_VERSION, 'update_required', DUEL_UPDATE_MESSAGE, 426);
             $events = $data['events'] ?? null;
             duel_require(is_array($events) && array_is_list($events) && count($events) > 0 && count($events) <= 30, 'invalid_event', 'Şut paketi geçersiz.');
+            $p = duel_with_last_event($p, duel_event_payload($id, $uid, (int)$p['shots']));
             foreach ($events as $e) {
-                duel_require(is_array($e), 'invalid_event', 'Şut kaydı geçersiz.');
-                $seq = duel_integer($e['seq'] ?? null, 1, 300, 'seq');
-                $payload = json_encode($e, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR); $hash = hash('sha256', $payload);
-                duel_require(strlen($payload) <= 4096, 'invalid_event', 'Şut kaydı çok büyük.');
-                if ($seq <= (int)$p['shots']) {
-                    $old = duel_query('SELECT payload_hash FROM duel_events WHERE duel_id=? AND user_id=? AND seq=?', [$id, $uid, $seq])->fetchColumn();
-                    duel_require($old && hash_equals((string)$old, $hash), 'event_conflict', 'Bu şut daha önce farklı kaydedilmiş.', 409); continue;
+                // Reddedilen şuttan önceki geçerli şutlar kalıcı olur; istemci reddi görüp
+                // olayı düşürür ve `me` durumuna göre yeniden hizalanır (paket sonsuza dek tekrarlanmaz).
+                try {
+                    duel_require(is_array($e), 'invalid_event', 'Şut kaydı geçersiz.');
+                    $seq = duel_integer($e['seq'] ?? null, 1, 300, 'seq');
+                    $payload = json_encode($e, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR); $hash = hash('sha256', $payload);
+                    duel_require(strlen($payload) <= 4096, 'invalid_event', 'Şut kaydı çok büyük.');
+                    if ($seq <= (int)$p['shots']) {
+                        $old = duel_query('SELECT payload_hash FROM duel_events WHERE duel_id=? AND user_id=? AND seq=?', [$id, $uid, $seq])->fetchColumn();
+                        duel_require($old && hash_equals((string)$old, $hash), 'event_conflict', 'Bu şut daha önce farklı kaydedilmiş.', 409); continue;
+                    }
+                    duel_require(!(int)$p['finished'], 'already_finished', 'Koşu tamamlandı.', 409);
+                    $next = duel_validate_event($e, $p, $now - (int)$d['starts_at_ms']);
+                } catch (DuelError $err) {
+                    return new DuelError($err->kind, $err->getMessage(), $err->status,
+                        ['seq'=>is_array($e) && is_int($e['seq'] ?? null) ? $e['seq'] : null, 'acceptedSeq'=>(int)$p['shots']]);
                 }
-                duel_require(!(int)$p['finished'], 'already_finished', 'Koşu tamamlandı.', 409);
-                $next = duel_validate_event($e, $p, $now - (int)$d['starts_at_ms']);
                 duel_query('INSERT INTO duel_events(duel_id,user_id,seq,payload,payload_hash) VALUES(?,?,?,?,?)', [$id, $uid, $seq, $payload, $hash]);
-                foreach (['score','shots','hits','misses','streak','max_streak','fever','fever_t','fever_hits','last_shot_ms'] as $key) $p[$key] = $next[$key];
+                foreach (['score','shots','hits','misses','streak','max_streak','fever','fever_t','fever_hits','last_shot_ms','last_rt_ms','last_path','last_stage'] as $key) $p[$key] = $next[$key];
                 duel_query('UPDATE duel_players SET score=?,shots=?,hits=?,misses=?,streak=?,max_streak=?,fever=?,fever_t=?,fever_hits=?,last_shot_ms=?,last_seen_ms=? WHERE duel_id=? AND user_id=?',
                     [$p['score'], $p['shots'], $p['hits'], $p['misses'], $p['streak'], $p['max_streak'], $p['fever'], $p['fever_t'], $p['fever_hits'], $p['last_shot_ms'], $now, $id, $uid]);
             }
@@ -561,7 +642,9 @@ function duel_route(string $method, string $path, array $user): array {
             // The persisted event stream is the result; never accept a client supplied summary.
             duel_query('UPDATE duel_players SET finished=1,last_seen_ms=? WHERE duel_id=? AND user_id=?', [$now, $id, $uid]);
         }
+        return null;
     });
+    if ($rejected) throw $rejected;
     return duel_snapshot($id, $uid, max(0, min(300, (int)($data['since'] ?? 0))));
 }
 

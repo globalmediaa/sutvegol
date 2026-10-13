@@ -71,6 +71,48 @@ class DuelPlayer {
   );
 }
 
+/// Sunucunun bu oyuncu için kabul ettiği son durum (`duel.me`). Bir şut
+/// reddedilince yerel oyun sayaçlarını buna göre yeniden hizalar.
+class DuelSelfState {
+  const DuelSelfState({
+    required this.score,
+    required this.shots,
+    required this.hits,
+    required this.misses,
+    required this.streak,
+    required this.maxStreak,
+    required this.feverHits,
+    required this.fever,
+    required this.feverT,
+    required this.lastT,
+    required this.lastRt,
+    required this.lastStage,
+  });
+  factory DuelSelfState.fromJson(Map<String, dynamic> j) {
+    int n(String k) => (j[k] as num?)?.toInt() ?? 0;
+    return DuelSelfState(
+      score: n('score'),
+      shots: n('shots'),
+      hits: n('hits'),
+      misses: n('misses'),
+      streak: n('streak'),
+      maxStreak: n('maxStreak'),
+      feverHits: n('feverHits'),
+      fever: j['fever'] == true,
+      feverT: n('feverT'),
+      lastT: n('lastT'),
+      lastRt: n('lastRt'),
+      lastStage: (j['lastStage'] as String?) ?? 'street',
+    );
+  }
+  final int score, shots, hits, misses, streak, maxStreak, feverHits;
+  final bool fever;
+
+  /// Kral Modu'nun başladığı `rt` (ms); son olayın vuruş ve sonuçlanma anları.
+  final int feverT, lastT, lastRt;
+  final String lastStage;
+}
+
 class DuelRematch {
   const DuelRematch({
     required this.expiresAt,
@@ -112,6 +154,7 @@ class DuelSnapshot {
     this.ratingAfter,
     this.ratingCounted = false,
     this.rematch,
+    this.me,
   });
   factory DuelSnapshot.fromResponse(Map<String, dynamic> response) {
     final j = response['duel'] as Map<String, dynamic>;
@@ -130,6 +173,7 @@ class DuelSnapshot {
     final result = j['result'] as Map<String, dynamic>?;
     final ghost = j['ghost'] as Map<String, dynamic>?;
     final rematch = j['rematch'] as Map<String, dynamic>?;
+    final me = j['me'] as Map<String, dynamic>?;
     return DuelSnapshot(
       id: j['id'] as String,
       seed: (j['seed'] as num).toInt(),
@@ -156,6 +200,7 @@ class DuelSnapshot {
       ratingAfter: (result?['ratingAfter'] as num?)?.toInt(),
       ratingCounted: result?['ratingCounted'] == true,
       rematch: rematch == null ? null : DuelRematch.fromJson(rematch),
+      me: me == null ? null : DuelSelfState.fromJson(me),
     );
   }
   final String id, nonce, status, kind;
@@ -168,6 +213,7 @@ class DuelSnapshot {
   final bool draw, ratingCounted;
   final int? xp, ratingBefore, ratingAfter;
   final DuelRematch? rematch;
+  final DuelSelfState? me;
   bool get finished => status == 'finished';
   bool get isGhost => kind == 'ghost';
   OpponentKind get opponentKind => !isGhost

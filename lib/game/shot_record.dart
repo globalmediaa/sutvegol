@@ -15,6 +15,7 @@ class ShotRecord {
   const ShotRecord({
     required this.seq,
     required this.t,
+    int? rt,
     required this.stage,
     required this.view,
     required this.target,
@@ -37,7 +38,7 @@ class ShotRecord {
     required this.feverHits,
     required this.maxStreak,
     required this.mult,
-  });
+  }) : rt = rt ?? t;
 
   /// Düello protokolü v2: can yok, şut saati (timeout), combo çarpanı.
   static const int version = 2;
@@ -45,8 +46,13 @@ class ShotRecord {
   /// Kayıt sırası (1'den başlar, boşluksuz).
   final int seq;
 
-  /// Koşunun başından itibaren geçen oyun süresi (ms, simülasyon saati).
+  /// Koşunun başından itibaren geçen oyun süresi (ms, simülasyon saati): vuruş
+  /// ya da şut saati ıskası anı.
   final int t;
+
+  /// Sonucun skora işlendiği an (ms, aynı saat; timeout'ta [t]). Kral Modu bu
+  /// anda başlar/biter, şut saati de buradan ölçülür; sunucu aynı kuralı uygular.
+  final int rt;
 
   /// Şut anındaki sahne (`Stage.name`) ve kamera (`wide` | `zoom`).
   final String stage;
@@ -89,6 +95,7 @@ class ShotRecord {
     'v': version,
     'seq': seq,
     't': t,
+    'rt': rt,
     'stage': stage,
     'view': view,
     'target': target == null ? null : _vec(target!),
@@ -133,9 +140,12 @@ class ShotRecord {
     if (keeperRaw is! List || keeperRaw.length != 2) {
       throw const FormatException('keeper');
     }
+    final t = _int(j['t'], 0, 86400000, 't');
     return ShotRecord(
       seq: _int(j['seq'], 1, 100000, 'seq'),
-      t: _int(j['t'], 0, 86400000, 't'),
+      t: t,
+      // Eski kayıtlarda yok: vuruş anı kabul edilir.
+      rt: j['rt'] == null ? t : _int(j['rt'], t, t + 60000, 'rt'),
       stage: stage,
       view: view,
       target: j['target'] == null ? null : _vecFrom(j['target'], 'target'),
