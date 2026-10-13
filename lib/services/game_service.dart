@@ -6,6 +6,7 @@ class LeaderboardEntry {
     required this.username,
     required this.score,
     required this.games,
+    this.blocked = false,
   });
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) =>
       LeaderboardEntry(
@@ -13,11 +14,18 @@ class LeaderboardEntry {
         username: json['username'] as String,
         score: int.parse('${json['score']}'),
         games: int.parse('${json['games']}'),
+        blocked: json['blocked'] == true,
       );
   final String id;
+
+  /// Sunucunun izleyiciye göre gösterdiği ad: engellediyse "Engellenen oyuncu",
+  /// şikâyetle gizlenmiş ya da uygunsuz ad "Oyuncu#XXXX".
   final String username;
   final int score;
   final int games;
+
+  /// İzleyici bu oyuncuyu engellemiş mi?
+  final bool blocked;
 }
 
 class GameSessionService {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -14,8 +15,11 @@ class UsernameScreen extends StatefulWidget {
 class _UsernameScreenState extends State<UsernameScreen> {
   final controller = TextEditingController();
   Timer? timer;
-  bool? available;
+  UsernameCheck? check;
   bool checking = false;
+
+  /// Kullanım Koşulları onayı; işaretlenmeden ad kaydedilemez.
+  bool consent = false;
   @override
   void dispose() {
     timer?.cancel();
@@ -23,19 +27,21 @@ class _UsernameScreenState extends State<UsernameScreen> {
     super.dispose();
   }
 
-  void changed(String value) {
+  void changed(String raw) {
     timer?.cancel();
+    final value = raw.trim();
+    final valid = RegExp(r'^[a-zA-Z0-9_]{3,20}$').hasMatch(value);
     setState(() {
-      available = null;
-      checking = value.length >= 3;
+      check = null;
+      checking = valid;
     });
-    if (value.length < 3) return;
+    if (!valid) return;
     timer = Timer(const Duration(milliseconds: 450), () async {
       try {
-        final ok = await AuthService.instance.usernameAvailable(value);
-        if (mounted) {
+        final result = await AuthService.instance.checkUsername(value);
+        if (mounted && controller.text.trim() == value) {
           setState(() {
-            available = ok;
+            check = result;
             checking = false;
           });
         }
@@ -48,8 +54,8 @@ class _UsernameScreenState extends State<UsernameScreen> {
   Future<void> _submit() async {
     try {
       await AuthService.instance.chooseUsername(controller.text);
-    } catch (_) {
-      if (mounted) setState(() => available = false);
+    } catch (e) {
+      if (mounted) setState(() => check = usernameRejected(e));
     }
   }
 
@@ -58,8 +64,8 @@ class _UsernameScreenState extends State<UsernameScreen> {
     final auth = AuthService.instance;
     final busy = auth.loading;
     final pad = MediaQuery.paddingOf(context);
-    final taken = available == false;
-    final free = available == true;
+    final feedback = usernameFeedback(check);
+    final free = check?.available == true && check!.allowed;
     return Scaffold(
       backgroundColor: FK.navy,
       body: GameBackdrop(
@@ -112,16 +118,9 @@ class _UsernameScreenState extends State<UsernameScreen> {
                           decoration: gameInput(
                             label: 'Kullanıcı adı',
                             icon: Icons.alternate_email_rounded,
-                            helper: free
-                                ? 'Bu kullanıcı adı kullanılabilir'
-                                : taken
-                                ? 'Bu kullanıcı adı alınmış. Başka bir tane dene.'
-                                : '3–20 karakter · harf, rakam ve _',
-                            helperStyle: free
-                                ? FK.t(size: 12, color: FK.green)
-                                : taken
-                                ? FK.t(size: 12, color: FK.red)
-                                : null,
+                            helper: feedback.text,
+                            helperStyle: feedback.style,
+                            helperMaxLines: 3,
                             suffix: checking
                                 ? const Padding(
                                     padding: EdgeInsets.all(14),
@@ -130,13 +129,13 @@ class _UsernameScreenState extends State<UsernameScreen> {
                                       color: FK.amber,
                                     ),
                                   )
-                                : available == null
+                                : feedback.ok == null
                                 ? null
                                 : Icon(
-                                    free
+                                    feedback.ok!
                                         ? Icons.check_circle_rounded
                                         : Icons.cancel_rounded,
-                                    color: free ? FK.green : FK.red,
+                                    color: feedback.ok! ? FK.green : FK.red,
                                   ),
                           ),
                         ),
@@ -148,7 +147,12 @@ class _UsernameScreenState extends State<UsernameScreen> {
                               style: FK.t(size: 13, color: FK.red, height: 1.3),
                             ),
                           ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 14),
+                        TermsConsent(
+                          value: consent,
+                          onChanged: (v) => setState(() => consent = v),
+                        ),
+                        const SizedBox(height: 14),
                         if (busy)
                           const BusyPill(height: 58)
                         else
@@ -156,7 +160,7 @@ class _UsernameScreenState extends State<UsernameScreen> {
                             label: 'SAHAYA ÇIK',
                             icon: Icons.sports_soccer,
                             height: 58,
-                            enabled: free,
+                            enabled: free && consent,
                             onTap: _submit,
                           ),
                         const SizedBox(height: 10),

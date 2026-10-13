@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../game/sut_ve_gol_game.dart';
+import '../services/moderation_service.dart';
 import '../services/progress_service.dart';
 import 'leaderboard_screen.dart';
 import 'account_screen.dart';
@@ -310,6 +311,10 @@ class _PauseOverlayState extends State<PauseOverlay>
               TextButton(
                 onPressed: () => _open('https://sutvegol.gmgaming.app/privacy'),
                 child: const Text('Gizlilik'),
+              ),
+              TextButton(
+                onPressed: () => _open(kTermsUrl),
+                child: const Text('Koşullar'),
               ),
               TextButton(
                 onPressed: () => _open('https://sutvegol.gmgaming.app/#destek'),

@@ -26,6 +26,8 @@ class DuelPlayer {
     this.ghost = false,
     this.rating,
     this.calibrating = false,
+    this.ownerId,
+    this.blocked = false,
   });
   factory DuelPlayer.fromJson(Map<String, dynamic> j) => DuelPlayer(
     id: j['id'] as String,
@@ -41,11 +43,19 @@ class DuelPlayer {
     ghost: j['ghost'] == true,
     rating: (j['rating'] as num?)?.toInt(),
     calibrating: j['calibrating'] == true,
+    ownerId: j['ownerId'] as String?,
+    blocked: j['blocked'] == true,
   );
   final String id, name;
   final int score, shots, hits, combo, maxStreak, silentMs;
   final bool finished, connected, ghost, calibrating;
   final int? rating;
+
+  /// Kayıtlı rakipte koşunun gerçek sahibi (şikâyet/engel hedefi); CPU'da null.
+  final String? ownerId;
+
+  /// İzleyici bu oyuncuyu (ghost'ta koşunun sahibini) engellemiş mi?
+  final bool blocked;
 
   DuelPlayer copyWith({
     int? score,
@@ -68,6 +78,8 @@ class DuelPlayer {
     ghost: ghost,
     rating: rating,
     calibrating: calibrating,
+    ownerId: ownerId,
+    blocked: blocked,
   );
 }
 

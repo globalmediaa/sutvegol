@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -54,6 +55,35 @@ class AccountScreen extends StatelessWidget {
                     'Rekorun, istatistiklerin ve ayarların hesabına anlık kaydedilir. '
                     'Uygulamayı silip yeniden yüklersen giriş yapınca kaldığın yerden devam edersin.',
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          GlassCard(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+            child: Column(
+              children: [
+                ListTile(
+                  key: const Key('account-blocked'),
+                  leading: const Icon(Icons.block_rounded, color: FK.red),
+                  title: const Text('Engellenen oyuncular'),
+                  subtitle: const Text('Engeli kaldır'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BlockedPlayersScreen(),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.gavel_rounded, color: FK.amber),
+                  title: const Text('Kullanım Koşulları'),
+                  subtitle: const Text(
+                    'Uygunsuz içeriğe ve tacize sıfır tolerans',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: openTerms,
                 ),
               ],
             ),

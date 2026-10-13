@@ -1,8 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -21,11 +25,21 @@ class _AuthScreenState extends State<AuthScreen>
   final password = TextEditingController();
   final username = TextEditingController();
   Timer? usernameTimer;
-  bool? usernameAvailable;
+  UsernameCheck? usernameCheck;
   bool checkingUsername = false;
   bool register = true;
   bool hidden = true;
+
+  /// Kayıtta Kullanım Koşulları onayı; işaretlenmeden hesap açılmaz.
+  bool consent = false;
   late final AnimationController _enter;
+  late final TapGestureRecognizer _termsLink = TapGestureRecognizer()
+    ..onTap = openTerms;
+  late final TapGestureRecognizer _privacyLink = TapGestureRecognizer()
+    ..onTap = () => launchUrl(
+      Uri.parse('https://sutvegol.gmgaming.app/privacy'),
+      mode: LaunchMode.externalApplication,
+    );
 
   bool get appleAvailable => appleSignInAvailable;
 
@@ -46,6 +60,8 @@ class _AuthScreenState extends State<AuthScreen>
     username.dispose();
     usernameTimer?.cancel();
     _enter.dispose();
+    _termsLink.dispose();
+    _privacyLink.dispose();
     super.dispose();
   }
 
@@ -54,16 +70,16 @@ class _AuthScreenState extends State<AuthScreen>
     final value = raw.trim();
     final valid = RegExp(r'^[a-zA-Z0-9_]{3,20}$').hasMatch(value);
     setState(() {
-      usernameAvailable = null;
+      usernameCheck = null;
       checkingUsername = valid;
     });
     if (!valid) return;
     usernameTimer = Timer(const Duration(milliseconds: 450), () async {
       try {
-        final available = await AuthService.instance.usernameAvailable(value);
+        final result = await AuthService.instance.checkUsername(value);
         if (mounted && username.text.trim() == value) {
           setState(() {
-            usernameAvailable = available;
+            usernameCheck = result;
             checkingUsername = false;
           });
         }
@@ -76,21 +92,30 @@ class _AuthScreenState extends State<AuthScreen>
   Future<void> run(Future<void> Function() action) async {
     try {
       await action();
-    } catch (_) {
-      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (register && e is ApiException && e.code == 'username_not_allowed') {
+          usernameCheck = usernameRejected(e);
+        }
+      });
     }
   }
 
   void _switch(int index) => setState(() {
     register = index == 0;
-    usernameAvailable = null;
+    usernameCheck = null;
     checkingUsername = false;
     usernameTimer?.cancel();
     AuthService.instance.error = null;
   });
 
   bool get canSubmit =>
-      !AuthService.instance.loading && (!register || usernameAvailable == true);
+      !AuthService.instance.loading &&
+      (!register ||
+          (usernameCheck?.available == true &&
+              usernameCheck!.allowed &&
+              consent));
 
   Future<void> _submit() => run(
     () => AuthService.instance.emailAuth(
@@ -138,10 +163,37 @@ class _AuthScreenState extends State<AuthScreen>
                         child: _card(auth, busy),
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        'Devam ederek Kullanım Koşulları ve Gizlilik Politikası’nı kabul etmiş olursun.',
+                      Text.rich(
+                        TextSpan(
+                          style: FK.t(size: 12, color: FK.muted, height: 1.35),
+                          children: [
+                            const TextSpan(text: 'Devam ederek '),
+                            TextSpan(
+                              text: 'Kullanım Koşulları',
+                              style: FK.t(
+                                size: 12,
+                                color: FK.amber,
+                                height: 1.35,
+                              ).copyWith(decoration: TextDecoration.underline),
+                              recognizer: _termsLink,
+                            ),
+                            const TextSpan(text: ' ve '),
+                            TextSpan(
+                              text: 'Gizlilik Politikası',
+                              style: FK.t(
+                                size: 12,
+                                color: FK.amber,
+                                height: 1.35,
+                              ).copyWith(decoration: TextDecoration.underline),
+                              recognizer: _privacyLink,
+                            ),
+                            const TextSpan(
+                              text:
+                                  '’nı kabul etmiş olursun. Uygunsuz içeriğe ve tacize sıfır tolerans uygulanır.',
+                            ),
+                          ],
+                        ),
                         textAlign: TextAlign.center,
-                        style: FK.t(size: 12, color: FK.muted, height: 1.35),
                       ),
                     ],
                   ),
@@ -261,6 +313,13 @@ class _AuthScreenState extends State<AuthScreen>
             ],
           ),
         ),
+      if (register) ...[
+        const SizedBox(height: 12),
+        TermsConsent(
+          value: consent,
+          onChanged: (v) => setState(() => consent = v),
+        ),
+      ],
       const SizedBox(height: 16),
       if (busy)
         const BusyPill(height: 56)
@@ -285,8 +344,7 @@ class _AuthScreenState extends State<AuthScreen>
   );
 
   Widget _usernameField() {
-    final taken = usernameAvailable == false;
-    final free = usernameAvailable == true;
+    final feedback = usernameFeedback(usernameCheck);
     return TextField(
       controller: username,
       onChanged: checkUsername,
@@ -297,16 +355,9 @@ class _AuthScreenState extends State<AuthScreen>
       decoration: gameInput(
         label: 'Kullanıcı adı',
         icon: Icons.alternate_email_rounded,
-        helper: free
-            ? 'Bu kullanıcı adı kullanılabilir'
-            : taken
-            ? 'Bu kullanıcı adı alınmış. Başka bir tane dene.'
-            : '3–20 karakter · harf, rakam ve _',
-        helperStyle: free
-            ? FK.t(size: 12, color: FK.green)
-            : taken
-            ? FK.t(size: 12, color: FK.red)
-            : null,
+        helper: feedback.text,
+        helperStyle: feedback.style,
+        helperMaxLines: 3,
         suffix: checkingUsername
             ? const Padding(
                 padding: EdgeInsets.all(14),
@@ -315,11 +366,13 @@ class _AuthScreenState extends State<AuthScreen>
                   color: FK.amber,
                 ),
               )
-            : usernameAvailable == null
+            : feedback.ok == null
             ? null
             : Icon(
-                free ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                color: free ? FK.green : FK.red,
+                feedback.ok!
+                    ? Icons.check_circle_rounded
+                    : Icons.cancel_rounded,
+                color: feedback.ok! ? FK.green : FK.red,
               ),
       ),
     );

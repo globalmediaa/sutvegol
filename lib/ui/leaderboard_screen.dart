@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../services/game_service.dart';
+import '../services/moderation_service.dart';
+import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 class LeaderboardScreen extends StatefulWidget {
-  const LeaderboardScreen({super.key, required this.myScore});
+  const LeaderboardScreen({super.key, required this.myScore, this.loader});
   final int myScore;
+
+  /// Testler için: sıralamayı sunucusuz verir.
+  @visibleForTesting
+  final Future<List<LeaderboardEntry>> Function(String period)? loader;
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
@@ -15,11 +21,14 @@ class LeaderboardScreen extends StatefulWidget {
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   final service = GameSessionService();
   String period = 'weekly';
-  late Future<List<LeaderboardEntry>> entries = service.leaderboard(period);
+  late Future<List<LeaderboardEntry>> entries = _load();
+
+  Future<List<LeaderboardEntry>> _load() =>
+      widget.loader?.call(period) ?? service.leaderboard(period);
 
   void select(String value) => setState(() {
     period = value;
-    entries = service.leaderboard(period);
+    entries = _load();
   });
 
   @override
@@ -37,8 +46,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ],
     ),
     body: RefreshIndicator(
-      onRefresh: () async =>
-          setState(() => entries = service.leaderboard(period)),
+      // setState kapanışı Future döndürmemeli (blok gövde).
+      onRefresh: () async => _reload(),
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -90,8 +99,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     ),
   );
 
+  void _reload() => setState(() {
+    entries = _load();
+  });
+
   Widget _row(int index, LeaderboardEntry entry) {
-    final me = entry.username == AuthService.instance.user?.username;
+    // Kalıcı kimlikle: başkasına gizlenen ad ("Oyuncu#…") kendi satırını şaşırtmaz.
+    final me = entry.id == AuthService.instance.user?.id;
     const medals = [FK.gold, FK.silver, FK.bronze];
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -137,6 +151,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               color: index < 3 ? medals[index] : FK.text,
             ),
           ),
+          // Başka oyuncu: ⋯ → Şikâyet et / Engelle. Kendi satırında aynı genişlikte boşluk.
+          if (me)
+            const SizedBox(width: 44)
+          else
+            PlayerActionsButton(
+              key: Key('lb-actions-${entry.id}'),
+              player: PlayerRef(
+                id: entry.id,
+                name: entry.username,
+                blocked: entry.blocked,
+              ),
+              reportContext: ReportContext.leaderboard,
+              onChanged: _reload,
+            ),
         ],
       ),
     );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'api_client.dart';
+import 'moderation_service.dart';
 import 'progress_service.dart';
 
 /// Google OAuth istemci kimlikleri derleme anında verilir:
@@ -38,6 +40,36 @@ bool get appleSignInAvailable =>
 /// Bulut kaydının girişte en fazla bu kadar beklenir; sonra arka planda sürer.
 const progressAttachTimeout = Duration(seconds: 4);
 
+/// /v1/username/check yanıtı: biçim, topluluk kuralı (filtre + yönetici yasağı) ve boşluk.
+class UsernameCheck {
+  const UsernameCheck({
+    required this.valid,
+    required this.allowed,
+    required this.available,
+    this.message,
+  });
+  factory UsernameCheck.fromJson(Map<String, dynamic> j) => UsernameCheck(
+    valid: j['valid'] == true,
+    // Eski sunucu `allowed` göndermez: yalnız `available` belirleyicidir.
+    allowed: j['allowed'] != false,
+    available: j['available'] == true,
+    message: j['message'] as String?,
+  );
+  final bool valid, allowed, available;
+
+  /// Uygunsuz adda sunucunun Türkçe açıklaması.
+  final String? message;
+}
+
+/// Sunucu hatası `username_not_allowed` gelmezse gösterilen açıklama.
+const kUsernameNotAllowed =
+    'Bu kullanıcı adı uygun değil. Küfür, hakaret, cinsel içerik, nefret söylemi '
+    'ya da resmî hesap taklidi içeremez.';
+
+/// Testler için: kullanıcı adı kontrolünü sunucusuz yanıtlar.
+@visibleForTesting
+Future<UsernameCheck> Function(String value)? debugUsernameCheck;
+
 class AppUser {
   const AppUser({
     required this.id,
@@ -46,6 +78,7 @@ class AppUser {
     this.displayName,
     this.avatarUrl,
     this.providers = const [],
+    this.termsVersion = 0,
   });
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
     id: json['id'] as String,
@@ -54,6 +87,7 @@ class AppUser {
     displayName: json['displayName'] as String?,
     avatarUrl: json['avatarUrl'] as String?,
     providers: (json['providers'] as List? ?? const []).cast<String>(),
+    termsVersion: (json['termsVersion'] as num?)?.toInt() ?? 0,
   );
   final String id;
   final String? email;
@@ -61,6 +95,9 @@ class AppUser {
   final String? displayName;
   final String? avatarUrl;
   final List<String> providers;
+
+  /// Sunucuda kayıtlı kabul edilen Kullanım Koşulları sürümü (0 = kayıt yok).
+  final int termsVersion;
   bool get needsUsername => username == null || username!.isEmpty;
 }
 
@@ -78,9 +115,17 @@ class AuthService extends ChangeNotifier {
       user = AppUser.fromJson(
         (await api.get('/v1/me'))['user'] as Map<String, dynamic>,
       );
+    } on ApiException catch (e) {
+      user = null;
+      // Askıya alınan hesap: giriş ekranı açıklamayı gösterir, saklı oturum silinir.
+      if (e.code == 'account_suspended') {
+        error = e.message;
+        await api.clear();
+      }
     } catch (_) {
       user = null;
     }
+    if (user != null) unawaited(ModerationService.instance.refresh());
     await _attachProgress();
     loading = false;
     notifyListeners();
@@ -109,10 +154,13 @@ class AuthService extends ChangeNotifier {
           'email': email.trim(),
           'password': password,
           if (register) 'username': username?.trim(),
+          // Kayıt ekranında işaretlenen Kullanım Koşulları sürümü (sunucuda saklanır).
+          if (register) 'termsVersion': kTermsVersion,
         },
         auth: false,
       );
       await _accept(result);
+      if (register) await ModerationService.saveTermsAccepted();
     });
   }
 
@@ -177,21 +225,28 @@ class AuthService extends ChangeNotifier {
     });
   }
 
-  Future<bool> usernameAvailable(String value) async {
+  /// Kayıt ve ad seçimi ile aynı kural: biçim, topluluk kuralı, boşluk.
+  Future<UsernameCheck> checkUsername(String value) async {
+    final hook = debugUsernameCheck;
+    if (hook != null) return hook(value);
     final result = await api.get(
       '/v1/username/check?username=${Uri.encodeQueryComponent(value)}',
       auth: false,
     );
-    return result['available'] == true;
+    return UsernameCheck.fromJson(result);
   }
+
+  Future<bool> usernameAvailable(String value) async =>
+      (await checkUsername(value)).available;
 
   Future<void> chooseUsername(String value) async {
     await _run(() async {
       final result = await api.put(
         '/v1/me/username',
-        data: {'username': value.trim()},
+        data: {'username': value.trim(), 'termsVersion': kTermsVersion},
       );
       user = AppUser.fromJson(result['user'] as Map<String, dynamic>);
+      await ModerationService.saveTermsAccepted();
     });
   }
 
@@ -203,6 +258,7 @@ class AuthService extends ChangeNotifier {
     } catch (_) {}
     await ProgressService.instance.attach(null);
     await api.clear();
+    ModerationService.instance.reset();
     user = null;
     notifyListeners();
   }
@@ -223,6 +279,7 @@ class AuthService extends ChangeNotifier {
       // Sunucu bulut ilerlemesini de sildi; bu cihazdaki kopya da temizlenir.
       await ProgressService.instance.forgetAccount();
       await api.clear();
+      ModerationService.instance.reset();
       user = null;
     });
   }
@@ -230,6 +287,8 @@ class AuthService extends ChangeNotifier {
   Future<void> _accept(Map<String, dynamic> result) async {
     await api.saveTokens(result);
     user = AppUser.fromJson(result['user'] as Map<String, dynamic>);
+    ModerationService.instance.reset();
+    unawaited(ModerationService.instance.refresh());
     await _attachProgress();
   }
 

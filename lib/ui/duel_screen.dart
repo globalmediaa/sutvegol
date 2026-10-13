@@ -8,6 +8,8 @@ import '../duel/duel_protocol.dart';
 import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
 import '../services/auth_service.dart';
+import '../services/moderation_service.dart';
+import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -45,6 +47,8 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _c.addListener(_changed);
+    // Engel/kaldır sonucu (maç bitmiş, yoklama durmuş olsa da) ad hemen değişir.
+    ModerationService.instance.addListener(_moderationChanged);
     _c.onRemoteShot = (e) {
       if (_loaded && _started) {
         _replica?.applyRemoteShot(e);
@@ -70,6 +74,45 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     scheduleMicrotask(() {
       if (mounted) _c.start();
     });
+  }
+
+  void _moderationChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Rakibin gösterilecek adı: bu oturumda engellendiyse "Engellenen oyuncu"
+  /// (sunucu sonraki yanıtta da aynısını yollar), değilse sunucunun verdiği ad.
+  String _displayName(DuelPlayer p) {
+    final id = p.ghost ? p.ownerId : p.id;
+    if (id == null || id == _c.userId) return p.name;
+    return ModerationService.instance.isBlocked(id, server: p.blocked)
+        ? kBlockedLabel
+        : p.name;
+  }
+
+  /// Şikâyet/engel hedefi: canlı rakip ya da kayıtlı koşunun sahibi; CPU'da yok.
+  PlayerRef? _opponentRef(DuelSnapshot s) {
+    final them = s.opponent(_c.userId);
+    final id = them.ghost ? them.ownerId : them.id;
+    if (id == null) return null;
+    return PlayerRef(id: id, name: _displayName(them), blocked: them.blocked);
+  }
+
+  Widget _opponentActions(
+    DuelSnapshot s, {
+    bool filled = true,
+    Key key = const Key('duel-opponent-actions'),
+  }) {
+    final ref = _opponentRef(s);
+    if (ref == null) return const SizedBox.shrink();
+    return PlayerActionsButton(
+      key: key,
+      player: ref,
+      reportContext: s.isGhost ? ReportContext.ghost : ReportContext.duel,
+      duelId: s.id,
+      size: 20,
+      filled: filled,
+    );
   }
 
   void _changed() {
@@ -178,6 +221,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _clock?.cancel();
     _c.removeListener(_changed);
+    ModerationService.instance.removeListener(_moderationChanged);
     _c.onRemoteShot = null;
     _c.onRealign = null;
     if (!_c.terminal) {
@@ -474,7 +518,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     child: Text(
       s.opponentKind == OpponentKind.cpu
           ? 'CPU koşusu · bilgisayar'
-          : 'Kayıtlı rakip · ${s.opponent(_c.userId).name}',
+          : 'Kayıtlı rakip · ${_displayName(s.opponent(_c.userId))}',
       textAlign: TextAlign.center,
       style: FK.t(size: 13, w: FontWeight.w600, color: FK.cyan),
     ),
@@ -531,6 +575,11 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                   )
                 else if (p.finished)
                   _badge('KOŞU BİTTİ', FK.muted),
+                // Rakip kartı: ⋯ → Şikâyet et / Engelle (canlı rakip ya da kayıtlı koşu sahibi).
+                if (opponent) ...[
+                  const SizedBox(width: 6),
+                  _opponentActions(s),
+                ],
               ],
             ),
           ),
@@ -601,7 +650,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
   Widget _playerScore(DuelPlayer p, Color color) => Column(
     children: [
       Text(
-        p.ghost ? '${p.name} (kayıt)' : p.name,
+        p.ghost ? '${_displayName(p)} (kayıt)' : _displayName(p),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: FK.t(size: 14, w: FontWeight.w600),
@@ -719,13 +768,31 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                   style: FK.t(size: 15, color: FK.muted, height: 1.4),
                 ),
                 const SizedBox(height: 4),
-                if (s.isGhost)
-                  _ghostChip(s)
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: _badge('CANLI RAKİP · ${them.name}', FK.cyan),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: s.isGhost
+                          ? _ghostChip(s)
+                          : Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _badge(
+                                'CANLI RAKİP · ${_displayName(them)}',
+                                FK.cyan,
+                              ),
+                            ),
+                    ),
+                    // Sonuç ekranında da rakibi şikâyet et / engelle.
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 4),
+                      child: _opponentActions(
+                        s,
+                        filled: false,
+                        key: const Key('duel-result-actions'),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),

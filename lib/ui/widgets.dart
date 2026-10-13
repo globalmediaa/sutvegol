@@ -601,6 +601,7 @@ InputDecoration gameInput({
   String? helper,
   TextStyle? helperStyle,
   Widget? suffix,
+  int helperMaxLines = 2,
 }) {
   OutlineInputBorder border(Color color, [double width = 1.2]) =>
       OutlineInputBorder(
@@ -613,7 +614,7 @@ InputDecoration gameInput({
     floatingLabelStyle: FK.t(size: 13, color: FK.amber),
     helperText: helper,
     helperStyle: helperStyle ?? FK.t(size: 12, color: FK.muted),
-    helperMaxLines: 2,
+    helperMaxLines: helperMaxLines,
     prefixIcon: icon == null ? null : Icon(icon, color: FK.muted, size: 22),
     suffixIcon: suffix,
     filled: true,
