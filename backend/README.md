@@ -30,6 +30,8 @@ curl -fsS https://sutvegol.gmgaming.app/api/health
 
 ## Güncelleme
 
+Olağan yol GitHub Actions'tır (aşağıda, Canlıya dağıtım). Sunucuda elle:
+
 ```bash
 cd ~/games/sutvegol && bash backend/deploy/deploy.sh
 ```
@@ -40,21 +42,42 @@ Yedekten dönüşte son yedekten sonraki hesap silme taleplerini yeniden uygula.
 
 ## Girişler ve yönetim
 
-- **Apple iOS:** Bundle `com.globalmedia.sutVeGol`, team `Y2MWRALQHR`, Sign in with Apple capability açık olmalı. Uygulama kimlik token'ı imza/issuer/audience/expiry ve tek kullanımlık nonce ile doğrulanır. Apple girişinin kendisi `.p8` istemez. Hesap silmede Apple yetkisini geri almak için `backend/.env` `APPLE_KEY_ID`, `APPLE_TEAM_ID` ve bu uygulamaya yetkili özel anahtar `backend/secrets/apple_key.p8` gereklidir. Anahtarı güvenli sunucu kanalıyla yerleştir; WhatsApp/git üzerinden paylaşma. Konteynerdeki www-data okuyabilsin: `sudo chgrp 33 backend/secrets backend/secrets/apple_key.p8 && chmod 640 backend/secrets/apple_key.p8` (deploy.sh parolasız sudo varsa bunu kendisi yapar). Dosya read-only mount edilir, imaja alınmaz.
-- **Google:** Bu uygulamaya ait iOS ve Web OAuth client ID'lerini `backend/.env` `GOOGLE_CLIENT_IDS` alanına virgülle yaz. İstemci ID'si gizli anahtar değildir; client secret kullanılmaz. iOS ID ve Web ID'yi Hızır’a ilet; Flutter build `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_SERVER_CLIENT_ID` ve `ios/Flutter/Social.xcconfig` ters callback şemasıyla yeniden derlenir. Başka uygulamanın client ID'sini kullanma. Android için paket/SHA-1 ayrıca yapılandırılır.
+- **Apple iOS:** Bundle `com.globalmedia.sutVeGol`, team `Y2MWRALQHR`, Sign in with Apple capability açık olmalı. Uygulama kimlik token'ı imza/issuer/audience/expiry ve tek kullanımlık nonce ile doğrulanır. Apple girişinin kendisi `.p8` istemez. Hesap silmede Apple yetkisini geri almak için `backend/.env` `APPLE_KEY_ID`, `APPLE_TEAM_ID` ve bu uygulamaya yetkili özel anahtar `backend/secrets/apple_key.p8` gereklidir. Anahtarı güvenli sunucu kanalıyla yerleştir; WhatsApp/git üzerinden paylaşma. Konteynerdeki www-data okuyabilsin: `sudo chgrp 33 backend/secrets backend/secrets/apple_key.p8 && chmod 640 backend/secrets/apple_key.p8` (deploy.sh parolasız sudo varsa bunu kendisi yapar). Dosya read-only mount edilir, imaja alınmaz. Otomatik yol: `SUTVEGOL_APPLE_KEY_ID` + `SUTVEGOL_APPLE_PRIVATE_KEY_B64` secret'ları (aşağıda, Canlıya dağıtım).
+- **Google:** Bu uygulamaya ait iOS ve Web OAuth client ID'lerini `backend/.env` `GOOGLE_CLIENT_IDS` alanına virgülle yaz. Otomatik yol: `SUTVEGOL_GOOGLE_CLIENT_IDS` secret'ı (aşağıda). İstemci ID'si gizli anahtar değildir; client secret kullanılmaz. iOS ID ve Web ID'yi Hızır’a ilet; Flutter build `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_SERVER_CLIENT_ID` ve `ios/Flutter/Social.xcconfig` ters callback şemasıyla yeniden derlenir. Başka uygulamanın client ID'sini kullanma. Android için paket/SHA-1 ayrıca yapılandırılır.
 - **E-posta:** Sunucu sonrası kayıt/giriş aktiftir; mail doğrulama veya parola sıfırlama servisi mevcut kapsamda yoktur.
 - **Admin:** E-posta `info@globalmedia.com.tr`. Parolayı ayarlamak/değiştirmek için `bash backend/deploy/admin-password.sh`: parolayı iki kez sorar, hash'i konteynerdeki PHP ile üretip `backend/.env` `ADMIN_PASSWORD_HASH` alanına tek tırnakla yazar, uygulamayı yeniden başlatır ve eşleştiğini doğrular. Admin yoksa alanı boş bırak, boş hash girişe izin vermez.
 
-## Rokas ile aynı GitHub Actions akışı
+## Canlıya dağıtım: Halk deposundan workflow_dispatch (13 Ekim 2026)
 
-`.github/workflows/deploy.yml`, **prod push** üzerine Hetzner'a SSH ile bağlanır, `~/games/sutvegol` altında ff-only pull + `backend/deploy/deploy.sh --no-pull` çalıştırır. Nginx adımı yalnız parolasız sudo varsa çalışır, yoksa atlanır. Aynı Hetzner/Rokas secret düzeni:
+Bu depoda Hetzner secret'ları yok. Deploy, aynı sunucuya zaten bağlanan `globalmediaa/pazarci-esnaf` deposundaki `.github/workflows/deploy-sutvegol.yml` ile elle tetiklenir: yalnız `workflow_dispatch`, input `ref` (bu deponun dalı, varsayılan `prod`). Oradaki `HETZNER_HOST`, `HETZNER_USER`, `HETZNER_SSH_KEY` kullanılır; `HETZNER_FINGERPRINT` orada da yok, host anahtarı Halk'ın kendi deploy'undaki gibi doğrulanmaz. Halk Pazarı'na dokunulmaz.
 
-- `HETZNER_HOST`, `HETZNER_USER`, `HETZNER_SSH_KEY`
-- `HETZNER_FINGERPRINT`: sunucunun doğrulanmış SSH host fingerprint'i
+```bash
+git push origin master:prod   # prod'u master'dan normal push ile güncelle (force yok)
+gh workflow run deploy-sutvegol.yml -R globalmediaa/pazarci-esnaf -f ref=prod
+gh run list -R globalmediaa/pazarci-esnaf -w deploy-sutvegol.yml -L 1
+```
 
-Bu değerler şu an Şut ve Gol deposunda bulunmuyor. Mevcut organization secret'ları bu repoya açılmalı veya repo Settings → Secrets and variables → Actions'a eklenmeli. Değerleri mesaj/git dosyasına koyma. Mevcut Rokas deploy kullanıcısı aynı yetkili alıcıdır; yeni sunucu hesabı gerekli değildir.
+Akış: runner `ref`'in bu depoda dal olarak var olduğunu doğrular → SSH ile `cd ~/games/sutvegol` → izlenen dosyalarda yerel değişiklik varsa durur → yalnız o dalı `git fetch` eder → yerel dal yoksa `origin/<ref>`'ten açar → `git switch` → `git pull --ff-only` (sunucuda ayrışmış commit varsa durur; force/reset yok) → `bash backend/deploy/secrets_env.sh` → secret değişkenlerini `unset` → `bash backend/deploy/deploy.sh --no-pull`. Sonuç Telegram'a (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS` varsa) "sutvegol" başlığıyla gider. Nginx adımı yalnız parolasız sudo varsa çalışır, yoksa atlanır. Prod'da master'da olmayan commit varsa force push yapılmaz; önce korunarak birleştirilir.
 
-İlk prod dağıtımından önce sunucuda `git switch prod` çalıştırılır. Samet'in akışı master'dan prod'u normal push ile günceller. Prod'da master'da olmayan commit varsa otomasyon force push yapmaz; önce korunarak birleştirilir. Bu depoda kurulum bitmeden prod tetiklenmez.
+Giriş ayarları pazarci-esnaf Actions secret'larındadır; değerleri mesaja, dosyaya ya da loga yazma (`gh secret set` değeri stdin'den okur):
+
+| Secret | Sunucudaki hedef |
+|---|---|
+| `SUTVEGOL_GOOGLE_CLIENT_IDS` | `backend/.env` `GOOGLE_CLIENT_IDS`: bu uygulamanın iOS + Web client ID'leri, virgüllü |
+| `SUTVEGOL_APPLE_KEY_ID` | `backend/.env` `APPLE_KEY_ID`: 10 karakterlik Key ID |
+| `SUTVEGOL_APPLE_PRIVATE_KEY_B64` | `backend/secrets/apple_key.p8`: P-256 `.p8` dosyasının tek satır base64'ü |
+
+```bash
+base64 < AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | gh secret set SUTVEGOL_APPLE_PRIVATE_KEY_B64 -R globalmediaa/pazarci-esnaf
+gh secret set SUTVEGOL_APPLE_KEY_ID -R globalmediaa/pazarci-esnaf        # değeri sorar
+gh secret set SUTVEGOL_GOOGLE_CLIENT_IDS -R globalmediaa/pazarci-esnaf   # ios-id,web-id
+```
+
+`secrets_env.sh` kuralları: boş ya da tanımsız secret hiçbir satırı/dosyayı silmez; geçersiz değer (Google ID biçimi, Key ID, P-256 olmayan ya da PEM olmayan anahtar) `::warning::` ile atlanır ve deploy sürer; değerler yazdırılmaz. `.env` yerinde yazılır (izin ve sahiplik korunur), etkin değer zaten aynıysa dosyaya dokunulmaz, ilk değişiklikten önce bir kez `backend/.env.pre-oauth` (600) yedeği alınır. Anahtar aynıysa yeniden yazılmaz; deploy.sh'ın beklediği gibi `secrets/` 750, `apple_key.p8` 640 ve ikisinin grubu 33 (konteynerdeki www-data). Grup sırasıyla `chgrp` → `sudo -n chgrp` → yerel `sutvegol-app` imajıyla çekmeden ve ağsız `docker run … chgrp` ile verilir (deploy kullanıcısı zaten docker grubunda); hiçbiri olmazsa dosya 600 kalır ve elle komut uyarısı çıkar. `backend/.env` yoksa (ilk kurulum) .env adımı atlanır, değerler bir sonraki deploy'da yazılır. Yerel test (sahte .env + sahte P-256 anahtar, gerçek sudo/docker çağrılmaz): `bash backend/tests/secrets_env_test.sh`.
+
+### Bu depodaki `.github/workflows/deploy.yml` neden çalışmıyor
+
+Rokas düzeninde **prod push** ile tetiklenir ve `HETZNER_HOST`, `HETZNER_USER`, `HETZNER_SSH_KEY`, `HETZNER_FINGERPRINT` secret'larını **bu depoda** bekler. Bu secret'lar burada tanımlı değil (organization secret'ı da açılmadı); bu yüzden her prod push'unda çalışır ama SSH adımında "missing server host" hatasıyla düşer. Sunucuya dokunmaz, yalnız kırmızı bir run bırakır. Secret'lar ileride bu depoya eklenirse diye silinmedi; eklenirse iki workflow aynı prod'u deploy eder (sunucudaki `.deploy.lock` aynı anda çalışmayı engeller), o zaman birini kapat. Kırmızı run istenmezse: `gh workflow disable deploy.yml -R globalmediaa/sutvegol`.
 
 ## Düello / test / sınırlar
 
