@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/src/bootstrap.php';
+require_once dirname(__DIR__) . '/src/moderation.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Platform');
@@ -37,6 +38,18 @@ if ($path === '/v1/progress' || $path === '/v1/progress/reset') {
     }
 }
 
+// Oyuncu güvenliği: şikâyet ve engelleme (backend/src/moderation.php).
+if ($path === '/v1/report' || $path === '/v1/blocks' || str_starts_with($path, '/v1/blocks/')) {
+    header('Cache-Control: no-store');
+    $user = current_user();
+    try { output(moderation_route($method, $path, $user)); }
+    catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
+        error_log('Moderation request failed: '.get_class($e));
+        fail('server', 'İstek tamamlanamadı. Yeniden dene.', 503);
+    }
+}
+
 if ($path === '/health') {
     try { db()->query('SELECT 1'); output(['ok'=>true,'service'=>'sut-ve-gol','duelVersion'=>2,'time'=>gmdate('c')]); }
     catch (Throwable $e) { fail('unhealthy','Servis hazırlanıyor.',503); }
@@ -46,10 +59,11 @@ if ($method === 'POST' && $path === '/v1/auth/register') {
     rate_limit('register',8,300);
     $data = body(); $email = mb_strtolower(trim((string) ($data['email'] ?? ''))); $password = (string) ($data['password'] ?? ''); $username = trim((string) ($data['username'] ?? ''));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) fail('invalid_signup', 'Geçerli e-posta ve en az 8 karakter parola gerekli.');
-    if (!valid_username($username)) fail('invalid_username', '3–20 karakter; yalnızca harf, rakam ve alt çizgi kullan.');
+    username_guard($username);
+    $terms = terms_version_from($data);
     try {
         db()->beginTransaction();
-        db()->prepare('INSERT INTO users(public_id,email,password_hash,username,username_key) VALUES(?,?,?,?,?)')->execute([public_id(), $email, password_hash($password, PASSWORD_DEFAULT), $username, username_key($username)]);
+        db()->prepare('INSERT INTO users(public_id,email,password_hash,username,username_key,terms_version,terms_accepted_at) VALUES(?,?,?,?,?,?,IF(? IS NULL,NULL,NOW()))')->execute([public_id(), $email, password_hash($password, PASSWORD_DEFAULT), $username, username_key($username), $terms, $terms]);
         $id = (int) db()->lastInsertId();
         db()->prepare('INSERT INTO identities(user_id,provider,provider_subject,email) VALUES(?,"email",?,?)')->execute([$id, $email, $email]);
         db()->commit();
@@ -65,9 +79,10 @@ if ($method === 'POST' && $path === '/v1/auth/register') {
 
 if ($method === 'POST' && $path === '/v1/auth/login') {
     rate_limit('login',12,300);
-    $data = body(); $query = db()->prepare('SELECT * FROM users WHERE email=? AND status="active"');
+    $data = body(); $query = db()->prepare('SELECT * FROM users WHERE email=? AND status<>"deleted"');
     $query->execute([mb_strtolower(trim((string) ($data['email'] ?? '')))]); $user = $query->fetch();
     if (!$user || !$user['password_hash'] || !password_verify((string) ($data['password'] ?? ''), $user['password_hash'])) fail('bad_credentials', 'E-posta veya parola hatalı.', 401);
+    if ($user['status'] !== 'active') fail('account_suspended', suspended_message(), 403);
     issue_session($user);
 }
 
@@ -98,19 +113,23 @@ if ($method === 'POST' && preg_match('#^/v1/auth/(google|apple)$#', $path, $matc
         db()->beginTransaction();
         $existing = null;
         if ($email) { $find=db()->prepare('SELECT * FROM users WHERE email=?'); $find->execute([$email]); $existing=$find->fetch(); }
+        if ($existing && $existing['status'] === 'suspended') { db()->rollBack(); fail('account_suspended', suspended_message(), 403); }
         if ($existing && $existing['status'] !== 'active') { db()->rollBack(); fail('account_unavailable','Hesap kullanılamıyor.',403); }
         if ($existing) $id=(int)$existing['id'];
         else { db()->prepare('INSERT INTO users(public_id,email,display_name) VALUES(?,?,?)')->execute([public_id(),$email,trim((string)($data['displayName']??''))?:null]); $id=(int)db()->lastInsertId(); }
         db()->prepare('INSERT INTO identities(user_id,provider,provider_subject,email) VALUES(?,?,?,?)')->execute([$id, $match[1], $subject, $email]);
         db()->commit(); $query = db()->prepare('SELECT * FROM users WHERE id=?'); $query->execute([$id]); $user = $query->fetch();
     }
+    if ($user['status'] === 'suspended') fail('account_suspended', suspended_message(), 403);
+    if ($user['status'] !== 'active') fail('account_unavailable', 'Hesap kullanılamıyor.', 403);
     issue_session($user);
 }
 
 if ($method === 'POST' && $path === '/v1/auth/refresh') {
     $data = body(); $query = db()->prepare('SELECT u.* FROM refresh_tokens r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.revoked_at IS NULL AND r.expires_at>NOW()');
     $query->execute([hash('sha256', (string) ($data['refreshToken'] ?? ''))]); $user = $query->fetch();
-    if (!$user) fail('unauthorized', 'Oturum yenilenemedi.', 401);
+    if (!$user || $user['status'] === 'deleted') fail('unauthorized', 'Oturum yenilenemedi.', 401);
+    if ($user['status'] !== 'active') fail('account_suspended', suspended_message(), 403);
     output(['ok' => true, 'accessToken' => access_token($user), 'expiresIn' => 900]);
 }
 
@@ -118,16 +137,21 @@ if ($method === 'GET' && $path === '/v1/me') { $user = current_user(); output(['
 
 if ($method === 'GET' && $path === '/v1/username/check') {
     rate_limit('username_check',60,60); $name = trim((string) ($_GET['username'] ?? '')); $available = false;
-    if (valid_username($name)) { $query = db()->prepare('SELECT 1 FROM users WHERE username_key=?'); $query->execute([username_key($name)]); $available = !$query->fetchColumn(); }
-    output(['ok' => true, 'valid' => valid_username($name), 'available' => $available]);
+    $issue = username_issue($name);
+    if (!$issue) { $query = db()->prepare('SELECT 1 FROM users WHERE username_key=?'); $query->execute([username_key($name)]); $available = !$query->fetchColumn(); }
+    $result = ['ok' => true, 'valid' => valid_username($name), 'allowed' => $issue === null, 'available' => $available];
+    // Eski istemci yalnız `available` okur: uygunsuz ad "alınmış" gibi görünür, kayıtta açık mesaj alır.
+    if ($issue && $issue[0] === 'username_not_allowed') $result += ['code' => $issue[0], 'message' => $issue[1]];
+    output($result);
 }
 
 if ($method === 'PUT' && $path === '/v1/me/username') {
-    $user = current_user(); $name = trim((string) (body()['username'] ?? ''));
-    if (!valid_username($name)) fail('invalid_username', '3–20 karakter; yalnızca harf, rakam ve alt çizgi kullan.');
+    $user = current_user(); $data = body(); $name = trim((string) ($data['username'] ?? ''));
+    username_guard($name);
+    $terms = terms_version_from($data);
     try {
-        $query = db()->prepare('UPDATE users SET username=?,username_key=? WHERE id=? AND username IS NULL');
-        $query->execute([$name, username_key($name), $user['id']]);
+        $query = db()->prepare('UPDATE users SET username=?,username_key=?,terms_version=COALESCE(?,terms_version),terms_accepted_at=IF(? IS NULL,terms_accepted_at,NOW()) WHERE id=? AND username IS NULL');
+        $query->execute([$name, username_key($name), $terms, $terms, $user['id']]);
         if (!$query->rowCount()) fail('username_locked', 'Kullanıcı adı destek üzerinden değiştirilebilir.', 409);
     } catch (PDOException $error) { fail('username_taken', 'Bu kullanıcı adı alınmış.', 409); }
     $query = db()->prepare('SELECT * FROM users WHERE id=?'); $query->execute([$user['id']]); output(['ok' => true, 'user' => public_user($query->fetch())]);
@@ -150,6 +174,8 @@ if ($method === 'DELETE' && $path === '/v1/me') {
     // Bulut ilerlemesi (rekor, istatistik, ayarlar) ve düello puanı/XP de hesapla birlikte silinir.
     db()->prepare('DELETE FROM player_progress WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM duel_ratings WHERE user_id=?')->execute([$user['id']]);
+    // Şikâyet ve engel kayıtları silinir; yasaklı ad listesi kişiden ayrıştırılır.
+    mod_forget_user((int)$user['id'], $user['username']);
     db()->prepare('UPDATE users SET email=NULL,password_hash=NULL,username=NULL,username_key=NULL,display_name=NULL,avatar_url=NULL,public_id=?,status="deleted" WHERE id=?')->execute([public_id(),$user['id']]);
     db()->commit(); output(['ok'=>true]);
 }
@@ -180,8 +206,12 @@ if ($method === 'POST' && preg_match('#^/v1/games/([a-f0-9]{32})/finish$#', $pat
 if ($method === 'GET' && $path === '/v1/leaderboard') {
     $period=in_array($_GET['period']??'all',['daily','weekly','all'],true)?$_GET['period']:'all';
     $time=$period==='daily'?'AND g.finished_at>=CURDATE()':($period==='weekly'?'AND g.finished_at>=DATE_SUB(NOW(),INTERVAL 7 DAY)':'');
-    $query=db()->query("SELECT u.public_id id,u.username,MAX(g.score) score,COUNT(g.id) games FROM users u JOIN game_sessions g ON g.user_id=u.id AND g.suspicious=0 AND g.finished_at IS NOT NULL $time WHERE u.status='active' AND u.username IS NOT NULL GROUP BY u.id ORDER BY score DESC,MIN(g.finished_at) ASC LIMIT 100");
-    output(['ok'=>true,'period'=>$period,'entries'=>$query->fetchAll()]);
+    // Oturum varsa izleyiciye göre: engellediği "Engellenen oyuncu", gizlenen/uygunsuz ad "Oyuncu#XXXX".
+    $viewer=optional_user(); header('Cache-Control: no-store');
+    $rows=db()->query("SELECT u.id uid,u.public_id id,u.username,MAX(g.score) score,COUNT(g.id) games FROM users u JOIN game_sessions g ON g.user_id=u.id AND g.suspicious=0 AND g.finished_at IS NOT NULL $time WHERE u.status='active' AND u.username IS NOT NULL GROUP BY u.id ORDER BY score DESC,MIN(g.finished_at) ASC LIMIT 100")->fetchAll();
+    $names=mod_public_names($viewer?(int)$viewer['id']:null,array_map(fn($r)=>['id'=>$r['uid'],'public_id'=>$r['id'],'username'=>$r['username']],$rows));
+    $entries=array_map(fn($r)=>['id'=>$r['id'],'username'=>$names[(int)$r['uid']]['name'],'score'=>(int)$r['score'],'games'=>(int)$r['games'],'blocked'=>$names[(int)$r['uid']]['blocked']],$rows);
+    output(['ok'=>true,'period'=>$period,'entries'=>$entries]);
 }
 
 fail('not_found', 'Uç nokta bulunamadı.', 404);

@@ -6,7 +6,8 @@ CREATE TABLE users (
  status ENUM('active','suspended','deleted') NOT NULL DEFAULT 'active',
  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
- last_seen_at DATETIME NULL, INDEX(created_at), INDEX(last_seen_at)
+ last_seen_at DATETIME NULL, terms_version SMALLINT UNSIGNED NULL, terms_accepted_at DATETIME NULL,
+ INDEX(created_at), INDEX(last_seen_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE identities (
@@ -48,3 +49,45 @@ CREATE TABLE api_rate_limits (
  bucket CHAR(64) NOT NULL, window_start DATETIME NOT NULL, hits SMALLINT UNSIGNED NOT NULL DEFAULT 1,
  PRIMARY KEY(bucket,window_start), INDEX(window_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Oyuncu güvenliği (migrations/20261013_moderation.sql ile aynı; yeni kurulumda migration atlar).
+CREATE TABLE user_reports (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ reporter_id BIGINT UNSIGNED NOT NULL,
+ target_id BIGINT UNSIGNED NOT NULL,
+ reason ENUM('username','cheating','other') NOT NULL,
+ context ENUM('duel','ghost','leaderboard') NOT NULL,
+ duel_id CHAR(32) NULL,
+ note VARCHAR(200) NULL,
+ reported_name VARCHAR(20) NULL,
+ status ENUM('open','dismissed','actioned') NOT NULL DEFAULT 'open',
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ resolved_at DATETIME NULL,
+ UNIQUE KEY uq_user_reports_pair (reporter_id, target_id),
+ INDEX ix_user_reports_open (status, created_at),
+ INDEX ix_user_reports_target (target_id, status, reason),
+ FOREIGN KEY(reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(target_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_blocks (
+ blocker_id BIGINT UNSIGNED NOT NULL,
+ blocked_id BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(blocker_id, blocked_id),
+ INDEX ix_user_blocks_blocked (blocked_id),
+ FOREIGN KEY(blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(blocked_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE name_bans (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ name_key VARCHAR(20) NOT NULL,
+ name_norm VARCHAR(40) NOT NULL,
+ user_id BIGINT UNSIGNED NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE KEY uq_name_bans_key (name_key),
+ INDEX ix_name_bans_norm (name_norm),
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

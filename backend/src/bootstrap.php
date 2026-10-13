@@ -74,9 +74,22 @@ function current_user(): array {
     } catch (Throwable $error) {
         fail('unauthorized', 'Oturum süresi doldu.', 401);
     }
-    $query = db()->prepare('SELECT * FROM users WHERE id=? AND status="active"');
+    $query = db()->prepare('SELECT * FROM users WHERE id=?');
     $query->execute([(int) $claims->sub]);
-    return $query->fetch() ?: fail('unauthorized', 'Hesap kullanılamıyor.', 401);
+    $user = $query->fetch();
+    // Askıya alınan hesap oturumu yenileyerek kurtaramaz: 401 değil, açıklamalı 403.
+    if ($user && $user['status'] === 'suspended') fail('account_suspended', suspended_message(), 403);
+    return $user && $user['status'] === 'active' ? $user : fail('unauthorized', 'Hesap kullanılamıyor.', 401);
+}
+
+/** Herkese açık uçlar (sıralama): oturum başlığı yoksa null, varsa geçerli olmalı (süresi dolduysa 401 → istemci yeniler). */
+function optional_user(): ?array {
+    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    return trim($header) === '' ? null : current_user();
+}
+
+function suspended_message(): string {
+    return 'Hesabın Kullanım Koşulları ihlali nedeniyle askıya alındı. İtiraz için info@globalmedia.com.tr adresine yaz.';
 }
 
 function providers(int $id): array {
@@ -90,6 +103,7 @@ function public_user(array $user): array {
         'displayName' => $user['display_name'], 'avatarUrl' => $user['avatar_url'],
         'requiresUsername' => $user['username'] === null,
         'providers' => providers((int)$user['id']),
+        'termsVersion' => isset($user['terms_version']) ? (int)$user['terms_version'] : 0,
     ];
 }
 

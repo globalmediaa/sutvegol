@@ -48,13 +48,19 @@ def mysql(sql: str, db: str | None = DB_NAME) -> str:
     return out.stdout
 
 
-def reset_schema() -> None:
-    """Creates a new isolated test database; never drops an existing database."""
+def reset_schema(collation: str = "utf8mb4_unicode_ci") -> None:
+    """Creates a new isolated test database; never drops an existing database.
+
+    `collation`: veritabanı varsayılanı. Canlıdaki gibi (docker MYSQL_DATABASE → sunucu
+    varsayılanı utf8mb4_0900_ai_ci) harmanlama karışımı hatalarını yakalamak için verilebilir.
+    """
     if not DB_NAME.startswith("sutvegol_test_") or not DB_NAME.replace('_','').isalnum():
         raise ValueError("Only newly-created sutvegol_test_* databases are allowed")
+    if not collation.replace('_', '').isalnum():
+        raise ValueError("invalid collation")
     mysql(
         f"CREATE DATABASE {DB_NAME} "
-        "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+        f"CHARACTER SET utf8mb4 COLLATE {collation};",
         db=None,
     )
     sql = (ROOT / "database/schema.sql").read_text()
@@ -67,8 +73,10 @@ def reset_schema() -> None:
 class Server:
     """php -S süreci; `with Server() as s:` ile kullanılır."""
 
-    def __init__(self, port: int | None = None):
+    def __init__(self, port: int | None = None, docroot: str = "public", env: dict | None = None):
         self.port = port or _free_port()
+        self.docroot = docroot
+        self.extra_env = env or {}
         self.base = f"http://127.0.0.1:{self.port}"
         self.proc: subprocess.Popen | None = None
         self.log = Path("/tmp") / f"sutvegol-php-{self.port}.log"
@@ -88,9 +96,10 @@ class Server:
                 "PHP_CLI_SERVER_WORKERS": "4",
             }
         )
+        env.update(self.extra_env)
         self.log_file = open(self.log, "w")
         self.proc = subprocess.Popen(
-            [PHP, "-S", f"127.0.0.1:{self.port}", "-t", str(ROOT / "public")],
+            [PHP, "-S", f"127.0.0.1:{self.port}", "-t", str(ROOT / self.docroot)],
             env=env,
             stdout=self.log_file,
             stderr=subprocess.STDOUT,
@@ -99,6 +108,9 @@ class Server:
         deadline = time.time() + 10
         while time.time() < deadline:
             try:
+                if self.docroot != "public":
+                    with socket.create_connection(("127.0.0.1", self.port), timeout=1):
+                        return self
                 if self.get("/health")[1].get("ok"):
                     return self
             except Exception:

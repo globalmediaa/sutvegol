@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/moderation.php';
 
 /*
  * Düello v2 (hibrit): 90 sn ortak kronometreyle eşzamanlı canlı yarış. Can yok; ıskalama
@@ -249,11 +250,13 @@ function duel_cpu_run(int $seed): array {
  * Benzer rating ve yakın tarih öne alınır; en iyi 5 adaydan biri rastgele seçilir. Kendi koşusu asla.
  */
 function duel_pick_ghost_source(int $user, float $rating): ?array {
+    // İki yönlü engel: engellediği ya da onu engelleyen oyuncunun koşusu kayıtlı rakip olmaz.
     $rows = duel_query('SELECT p.duel_id,p.user_id FROM duel_players p JOIN duels d ON d.id=p.duel_id JOIN users u ON u.id=p.user_id LEFT JOIN duel_ratings r ON r.user_id=p.user_id
         WHERE d.version>=2 AND d.status="finished" AND d.created_at>=DATE_SUB(NOW(),INTERVAL 30 DAY) AND p.user_id<>? AND p.forfeited=0 AND p.shots>=3
           AND (d.reason IN ("completed","time") OR p.last_shot_ms>=60000)
           AND u.status="active" AND u.username IS NOT NULL
-        ORDER BY ABS(COALESCE(r.rating,1500)-?) + TIMESTAMPDIFF(HOUR,d.created_at,NOW())*2, d.created_at DESC LIMIT 5', [$user, $rating])->fetchAll();
+          AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=? AND b.blocked_id=p.user_id) OR (b.blocker_id=p.user_id AND b.blocked_id=?))
+        ORDER BY ABS(COALESCE(r.rating,1500)-?) + TIMESTAMPDIFF(HOUR,d.created_at,NOW())*2, d.created_at DESC LIMIT 5', [$user, $user, $user, $rating])->fetchAll();
     shuffle($rows);
     foreach ($rows as $row) {
         $events = [];
@@ -425,12 +428,18 @@ function duel_snapshot(string $id, int $user, int $since = 0, bool $withGhost = 
         $events = $ghost ? [] : duel_query('SELECT e.payload FROM duel_events e WHERE e.duel_id=? AND e.user_id<>? AND e.seq>? ORDER BY e.seq LIMIT 300', [$id, $user, $since])->fetchAll();
         $ratings = [];
         foreach ($players as $p) $ratings[(int)$p['user_id']] = duel_rating_row((int)$p['user_id']);
+        // Rakip adı izleyiciye göre: engellediyse "Engellenen oyuncu", 3 şikâyet / uygunsuz ad "Oyuncu#XXXX".
+        $owner = $ghost && $d['ghost_source'] !== 'cpu' && $d['ghost_user_id'] !== null
+            ? (duel_query('SELECT id,public_id,username FROM users WHERE id=? AND status="active"', [(int)$d['ghost_user_id']])->fetch() ?: null) : null;
+        $nameRows = array_map(fn($p) => ['id'=>(int)$p['user_id'], 'public_id'=>$p['public_id'], 'username'=>$p['username']], $players);
+        if ($owner) $nameRows[] = ['id'=>(int)$owner['id'], 'public_id'=>$owner['public_id'], 'username'=>$owner['username']];
+        $names = mod_public_names($user, $nameRows);
         $mine = null; $other = null; $out = [];
         foreach ($players as $p) {
             $isMe = (int)$p['user_id'] === $user;
             if ($isMe) $mine = $p; else $other = $p;
             $r = $ratings[(int)$p['user_id']];
-            $out[] = ['id'=>$p['public_id'],'username'=>$p['username'] ?? 'Oyuncu','seat'=>(int)$p['seat'],'score'=>(int)$p['score'],'lives'=>(int)$p['lives'],
+            $out[] = ['id'=>$p['public_id'],'username'=>$names[(int)$p['user_id']]['name'],'blocked'=>$names[(int)$p['user_id']]['blocked'],'seat'=>(int)$p['seat'],'score'=>(int)$p['score'],'lives'=>(int)$p['lives'],
                 'shots'=>(int)$p['shots'],'hits'=>(int)$p['hits'],'combo'=>(int)($p['streak'] ?? 0),'maxStreak'=>(int)$p['max_streak'],'finished'=>(bool)$p['finished'],
                 'connected'=>$p['user_status'] === 'active' && ($isMe || $now - (int)$p['last_seen_ms'] < DUEL_STALE_MS),
                 'silentMs'=>$isMe ? 0 : max(0, $now - max((int)$p['last_seen_ms'], min($now, $starts))),
@@ -442,8 +451,10 @@ function duel_snapshot(string $id, int $user, int $since = 0, bool $withGhost = 
             $elapsed = $finished ? PHP_INT_MAX : $now - $starts;
             $prog = duel_ghost_progress($ghostEvents, $elapsed);
             $cpu = $d['ghost_source'] === 'cpu';
-            $name = $cpu ? null : duel_query('SELECT username FROM users WHERE id=? AND status="active"', [(int)$d['ghost_user_id']])->fetchColumn();
-            $out[] = ['id'=>DUEL_GHOST_ID,'username'=>$cpu ? 'CPU' : ($name ?: 'Kayıtlı oyuncu'),'seat'=>1,'score'=>$prog['score'],'lives'=>3,
+            $ownerName = $owner ? $names[(int)$owner['id']] : null;
+            // ownerId: kayıtlı koşunun sahibi (şikâyet/engel hedefi); CPU ya da silinmiş sahipte null.
+            $out[] = ['id'=>DUEL_GHOST_ID,'username'=>$cpu ? 'CPU' : ($ownerName['name'] ?? 'Kayıtlı oyuncu'),'ownerId'=>$owner['public_id'] ?? null,
+                'blocked'=>$ownerName['blocked'] ?? false,'seat'=>1,'score'=>$prog['score'],'lives'=>3,
                 'shots'=>$prog['shots'],'hits'=>$prog['hits'],'combo'=>$prog['streak'],'maxStreak'=>$prog['max_streak'],
                 'finished'=>$finished || $now - $starts >= DUEL_SECONDS * 1000,'connected'=>true,'silentMs'=>0,'ghost'=>true,'rating'=>null,'calibrating'=>false];
             $ghostInfo = ['source'=>$cpu ? 'cpu' : 'recorded','eventCount'=>count($ghostEvents),'events'=>$withGhost ? $ghostEvents : null];
@@ -454,7 +465,7 @@ function duel_snapshot(string $id, int $user, int $since = 0, bool $withGhost = 
         $draw = $v2 ? (bool)(int)$d['draw'] : $winnerId === null;
         if ($ghost && $finished && $winnerId === null && !$draw) $winnerId = DUEL_GHOST_ID;
         $rematch = null;
-        if ($finished && !$ghost && $v2 && $other) {
+        if ($finished && !$ghost && $v2 && $other && !mod_pair_blocked($user, (int)$other['user_id'])) {
             $rematch = ['expiresAtMs'=>(int)$d['finished_at_ms'] + DUEL_REMATCH_MS,'mine'=>(bool)(int)$mine['rematch'],'theirs'=>(bool)(int)$other['rematch'],
                 'duelId'=>duel_query('SELECT id FROM duels WHERE rematch_of=?', [$id])->fetchColumn() ?: null];
         }
@@ -533,7 +544,11 @@ function duel_queue(int $user): array {
             $joined = (int)duel_query('SELECT joined_ms FROM duel_queue WHERE user_id=?', [$user])->fetchColumn();
             $waited = $now - $joined;
             $mine = (float)duel_rating_row($user)['rating'];
-            $cands = duel_query('SELECT q.user_id,q.joined_ms,COALESCE(r.rating,1500) rating FROM duel_queue q JOIN users u ON u.id=q.user_id LEFT JOIN duel_ratings r ON r.user_id=q.user_id WHERE q.user_id<>? AND u.status="active" AND u.username IS NOT NULL ORDER BY q.joined_ms,q.user_id LIMIT 50 FOR UPDATE', [$user])->fetchAll();
+            // İki yönlü engel: engellediği ya da onu engelleyen oyuncuyla eşleşmez.
+            $cands = duel_query('SELECT q.user_id,q.joined_ms,COALESCE(r.rating,1500) rating FROM duel_queue q JOIN users u ON u.id=q.user_id LEFT JOIN duel_ratings r ON r.user_id=q.user_id
+                WHERE q.user_id<>? AND u.status="active" AND u.username IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=? AND b.blocked_id=q.user_id) OR (b.blocker_id=q.user_id AND b.blocked_id=?))
+                ORDER BY q.joined_ms,q.user_id LIMIT 50 FOR UPDATE', [$user, $user, $user])->fetchAll();
             foreach ($cands as $c) {
                 $band = duel_band(max($waited, $now - (int)$c['joined_ms']), count($cands));
                 if (abs((float)$c['rating'] - $mine) <= $band) return duel_create_live([(int)$c['user_id'], $user], $now);
@@ -554,8 +569,10 @@ function duel_rematch(string $id, int $user): array {
         duel_require($d['status'] === 'finished' && $d['kind'] === 'live' && (int)$d['version'] >= 2, 'rematch_unavailable', 'Bu maç için rövanş yok.', 409);
         if (duel_query('SELECT id FROM duels WHERE rematch_of=?', [$id])->fetchColumn()) return;
         duel_require($now <= (int)$d['finished_at_ms'] + DUEL_REMATCH_MS + 1000, 'rematch_expired', 'Rövanş süresi doldu.', 409);
-        duel_query('UPDATE duel_players SET rematch=1 WHERE duel_id=? AND user_id=?', [$id, $user]);
         $other = array_values(array_filter($players, fn($p) => (int)$p['user_id'] !== $user))[0];
+        // Maçtan sonra engellenen (ya da engelleyen) rakiple rövanş yok.
+        duel_require(!mod_pair_blocked($user, (int)$other['user_id']), 'rematch_unavailable', 'Bu oyuncuyla rövanş yapılamıyor.', 409);
+        duel_query('UPDATE duel_players SET rematch=1 WHERE duel_id=? AND user_id=?', [$id, $user]);
         if (!(int)$other['rematch']) return;
         $busy = (int)duel_query('SELECT COUNT(*) FROM duel_players p JOIN duels x ON x.id=p.duel_id WHERE p.user_id IN (?,?) AND x.status="active"', [$user, $other['user_id']])->fetchColumn();
         duel_require(!$busy && $other['user_status'] === 'active', 'rematch_unavailable', 'Rakibin başka bir maça geçti.', 409);

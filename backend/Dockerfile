@@ -22,7 +22,7 @@ COPY backend/deploy/php.ini /usr/local/etc/php/conf.d/sutvegol.ini
 COPY backend/public/index.php ./backend/public/index.php
 RUN apache2ctl -t
 RUN printf '<?php require dirname(__DIR__, 2)."/backend/public/index.php";\n' > /var/www/html/api/index.php \
-    && printf 'RewriteEngine On\nRewriteCond %%{REQUEST_FILENAME} !-f\nRewriteCond %%{REQUEST_FILENAME} !-d\nRewriteRule ^api/(.*)$ api/index.php [QSA,L]\nRewriteRule ^privacy/?$ privacy.html [L]\nRewriteRule ^account-deletion/?$ account-deletion.html [L]\n' > /var/www/html/.htaccess \
+    && printf 'RewriteEngine On\nRewriteCond %%{REQUEST_FILENAME} !-f\nRewriteCond %%{REQUEST_FILENAME} !-d\nRewriteRule ^api/(.*)$ api/index.php [QSA,L]\nRewriteRule ^privacy/?$ privacy.html [L]\nRewriteRule ^account-deletion/?$ account-deletion.html [L]\nRewriteRule ^terms/?$ terms.html [L]\n' > /var/www/html/.htaccess \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R a+rX /var/www/backend /var/www/html
 EXPOSE 80
