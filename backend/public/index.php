@@ -39,7 +39,7 @@ if ($path === '/v1/progress' || $path === '/v1/progress/reset') {
 }
 
 // Oyuncu güvenliği: şikâyet ve engelleme (backend/src/moderation.php).
-if ($path === '/v1/report' || $path === '/v1/blocks' || str_starts_with($path, '/v1/blocks/')) {
+if ($path === '/v1/report' || $path === '/v1/me/terms' || $path === '/v1/blocks' || str_starts_with($path, '/v1/blocks/')) {
     header('Cache-Control: no-store');
     $user = current_user();
     try { output(moderation_route($method, $path, $user)); }

@@ -80,7 +80,7 @@ class Moderation(unittest.TestCase):
         cls.admin_server.__enter__()
         cls.u = {n: cls.s.register('mo_' + n) for n in
                  ['ana', 'bek', 'cem', 'dua', 'ece', 'fat', 'gul', 'han', 'hedef', 'gizli', 'spam', 'sahip',
-                  'seyirci', 'rakip', 'rezil', 'cezali', 'silinen']}
+                  'seyirci', 'rakip', 'rezil', 'cezali', 'silinen', 'x1', 'kuk1', 'kuk2', 'kuk3']}
 
     @classmethod
     def tearDownClass(cls):
@@ -232,6 +232,13 @@ class Moderation(unittest.TestCase):
         self.assertEqual((s, r['error']['code']), (429, 'report_limit'))
         self.assertEqual(self.report('spam', targets[3], 'cheating')[0], 200)  # aynı hedef sayılmaz
         self.assertEqual(last(f"SELECT COUNT(*) FROM user_reports WHERE reporter_id={self.uid('spam')}"), '20')
+        # Reddedilmiş kaydı sebep değiştirerek yeniden açmak yeni şikâyet sayılır (sınırda 429).
+        mysql(f"UPDATE user_reports SET status='dismissed' WHERE reporter_id={self.uid('spam')} AND target_id=(SELECT id FROM users WHERE public_id='{targets[5]}')")
+        s, r = self.report('spam', targets[5], 'other')
+        self.assertEqual((s, r['error']['code']), (429, 'report_limit'))
+        mysql(f"UPDATE user_reports SET created_at=DATE_SUB(NOW(),INTERVAL 2 DAY) WHERE reporter_id={self.uid('spam')}")
+        self.assertEqual(self.report('spam', targets[5], 'other')[0], 200)
+        self.assertEqual(last(f"SELECT CONCAT(status,'|',created_at>DATE_SUB(NOW(),INTERVAL 1 HOUR)) FROM user_reports WHERE reporter_id={self.uid('spam')} AND target_id=(SELECT id FROM users WHERE public_id='{targets[5]}')"), 'open|1')
 
     def test_05_three_username_reports_hide_name(self):
         self.play('gizli'); self.play('rakip')
@@ -257,6 +264,36 @@ class Moderation(unittest.TestCase):
         self.assertEqual(self.board()[target]['username'], 'mo_gizli')
         self.report('ana', target)
         self.assertEqual(last(f"SELECT status FROM user_reports WHERE reporter_id={self.uid('ana')} AND target_id={self.uid('gizli')}"), 'dismissed')
+        # Onaylanan ad: sebep değiştirip geri dönmek ya da 3 yeni (sahte) hesap adı yeniden gizleyemez.
+        self.report('ana', target, 'other'); self.report('ana', target, 'username')
+        for who in ['kuk1', 'kuk2', 'kuk3']:
+            self.report(who, target)
+        self.assertEqual(self.board()[target]['username'], 'mo_gizli')
+        status, html = admin.request()
+        self.assertIn('Ad onaylandı', html.split('@mo_gizli')[1][:200])
+        # Ad değişince onay düşer: yeni ad yine 3 şikâyetle gizlenebilir.
+        mysql(f"UPDATE users SET username='mo_gizli2',username_key='mo_gizli2' WHERE public_id='{target}'")
+        for who in ['kuk1', 'kuk2', 'kuk3']:
+            self.report(who, target)
+        self.assertEqual(self.board()[target]['username'], label)
+        mysql(f"UPDATE users SET username='mo_gizli',username_key='mo_gizli' WHERE public_id='{target}'")
+
+    def test_05b_leaderboard_ignores_stale_tokens_and_terms_endpoint(self):
+        # Bozuk ya da silinmiş hesabın anahtarı sıralamayı kırmaz (anonim görünüm).
+        s, r = self.s.get('/v1/leaderboard?period=all', 'bozuk.anahtar.degeri')
+        self.assertEqual(s, 200, r)
+        gone = self.s.register('mo_eski_oturum')
+        self.s.delete('/v1/me', {}, gone['token'])
+        self.assertEqual(self.s.get('/v1/leaderboard?period=all', gone['token'])[0], 200)
+        self.assertEqual(self.s.get('/v1/me', gone['token'])[0], 401)  # korumalı uçlar yine 401
+        # Mevcut hesap koşulları uygulamada bir kez onaylar: POST /v1/me/terms.
+        self.assertEqual(self.s.get('/v1/me', self.tok('han'))[1]['user']['termsVersion'], 0)
+        s, r = self.s.post('/v1/me/terms', dict(termsVersion=7), self.tok('han'))
+        self.assertEqual((s, r['error']['code']), (422, 'invalid_terms'))
+        s, r = self.s.post('/v1/me/terms', dict(termsVersion=1), self.tok('han'))
+        self.assertEqual((s, r['termsVersion']), (200, 1), r)
+        self.assertEqual(self.s.get('/v1/me', self.tok('han'))[1]['user']['termsVersion'], 1)
+        self.assertEqual(self.s.post('/v1/me/terms', dict(termsVersion=1))[0], 401)
 
     def test_06_legacy_offensive_name_is_masked(self):
         # Filtreden önce alınmış uygunsuz ad: başkalarına "Oyuncu#XXXX", sahibine kendi adı.
@@ -373,6 +410,12 @@ class Moderation(unittest.TestCase):
             s, r = self.register(variant)
             self.assertEqual((s, r['error']['code']), (422, 'username_not_allowed'), variant)
         self.assertFalse(self.s.get('/v1/username/check?username=mo_rezil')[1]['allowed'])
+        # Kısa kök ("mo_x1" → "mox") yalnız tam adıyla yasaklanır; benzer masum adlar alınabilir.
+        status, html = admin.act('rename', self.pid('x1'))
+        self.assertIn('→ @oyuncu_', html)
+        self.assertEqual(last("SELECT CONCAT(name_key,'|',name_norm,'|') FROM name_bans WHERE name_key='mo_x1'"), 'mo_x1||')
+        self.assertEqual(self.register('mo_x1')[1]['error']['code'], 'username_not_allowed')
+        self.assertEqual(self.register('mo_x2')[0], 200)
         # Askıya alma: giriş, oturum, yenileme ve eşleşme kapanır; sıralamadan çıkar.
         self.play('cezali')
         cezali = self.pid('cezali')
@@ -381,6 +424,7 @@ class Moderation(unittest.TestCase):
         s, r = self.s.post('/v1/auth/login', dict(email='mo_cezali@test.local', password='password1'))
         self.assertEqual((s, r['error']['code']), (403, 'account_suspended'))
         self.assertIn('askıya alındı', r['error']['message'])
+        self.assertIn('hesap silme', r['error']['message'])
         s, r = self.s.post('/v1/auth/login', dict(email='mo_cezali@test.local', password='wrong-pass'))
         self.assertEqual((s, r['error']['code']), (401, 'bad_credentials'))  # parola bilinmeden durum sızmaz
         self.assertEqual(self.s.get('/v1/me', self.tok('cezali'))[1]['error']['code'], 'account_suspended')
@@ -415,8 +459,8 @@ class Moderation(unittest.TestCase):
     def test_11_migration_is_idempotent(self):
         mysql((ROOT / 'database/migrations/20261013_moderation.sql').read_text())
         mysql((ROOT / 'database/migrations/20261013_moderation.sql').read_text())
-        cols = last("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME IN ('terms_version','terms_accepted_at')")
-        self.assertEqual(cols, '2')
+        cols = last("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME IN ('terms_version','terms_accepted_at','name_cleared_key')")
+        self.assertEqual(cols, '3')
         self.assertGreater(int(last("SELECT COUNT(*) FROM user_reports")), 0)
         self.assertEqual(last("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_reports'"), 'utf8mb4_unicode_ci')
 

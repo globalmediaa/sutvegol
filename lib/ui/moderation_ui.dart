@@ -565,6 +565,92 @@ class _TermsConsentState extends State<TermsConsent> {
   );
 }
 
+/// Kayıttan önce açılmış (onayı olmayan) hesap: oyuna girmeden bir kez Kullanım Koşulları onayı.
+class TermsGateScreen extends StatefulWidget {
+  const TermsGateScreen({super.key});
+  @override
+  State<TermsGateScreen> createState() => _TermsGateScreenState();
+}
+
+class _TermsGateScreenState extends State<TermsGateScreen> {
+  bool _consent = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    final name = AuthService.instance.user?.username;
+    return Scaffold(
+      backgroundColor: FK.navy,
+      body: GameBackdrop(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(20, pad.top + 20, 20, pad.bottom + 20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: GlassCard(
+                radius: 28,
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'KULLANIM KOŞULLARI',
+                      textAlign: TextAlign.center,
+                      style: FK.t(
+                        size: 12,
+                        w: FontWeight.w700,
+                        color: FK.amber,
+                        spacing: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sahaya çıkmadan önce',
+                      textAlign: TextAlign.center,
+                      style: FK.t(size: 28, w: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${name == null ? 'Kullanıcı adın' : '@$name adın'} düelloda ve '
+                      'sıralamada diğer oyunculara görünür. Devam etmek için Kullanım '
+                      'Koşulları’nı onayla. Oyuncuları ⋯ düğmesinden şikâyet edebilir '
+                      've engelleyebilirsin.',
+                      textAlign: TextAlign.center,
+                      style: FK.t(size: 15, color: FK.muted, height: 1.4),
+                    ),
+                    const SizedBox(height: 18),
+                    TermsConsent(
+                      value: _consent,
+                      onChanged: (v) => setState(() => _consent = v),
+                    ),
+                    const SizedBox(height: 16),
+                    PillButton(
+                      key: const Key('terms-gate-continue'),
+                      label: 'DEVAM ET',
+                      icon: Icons.sports_soccer,
+                      height: 56,
+                      enabled: _consent,
+                      onTap: AuthService.instance.acceptTerms,
+                    ),
+                    const SizedBox(height: 10),
+                    PillButton(
+                      label: 'ÇIKIŞ YAP',
+                      primary: false,
+                      height: 48,
+                      fontSize: 15,
+                      onTap: AuthService.instance.logout,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Hesabım > Engellenen oyuncular: liste ve "Engeli kaldır".
 class BlockedPlayersScreen extends StatefulWidget {
   const BlockedPlayersScreen({super.key});

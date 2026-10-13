@@ -65,31 +65,46 @@ function access_token(array $user): string {
     ], envv('APP_KEY') ?? '', 'HS256');
 }
 
-function current_user(): array {
+/** Bearer oturumu: [kullanıcı satırı|null, sorun: missing|expired|suspended|gone|null]. */
+function bearer_user(): array {
     if (!preg_match('/^Bearer\s+(.+)$/i', $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '', $match)) {
-        fail('unauthorized', 'Oturum gerekli.', 401);
+        return [null, 'missing'];
     }
     try {
         $claims = Firebase\JWT\JWT::decode($match[1], new Firebase\JWT\Key(envv('APP_KEY') ?? '', 'HS256'));
     } catch (Throwable $error) {
-        fail('unauthorized', 'Oturum süresi doldu.', 401);
+        return [null, 'expired'];
     }
     $query = db()->prepare('SELECT * FROM users WHERE id=?');
     $query->execute([(int) $claims->sub]);
     $user = $query->fetch();
-    // Askıya alınan hesap oturumu yenileyerek kurtaramaz: 401 değil, açıklamalı 403.
-    if ($user && $user['status'] === 'suspended') fail('account_suspended', suspended_message(), 403);
-    return $user && $user['status'] === 'active' ? $user : fail('unauthorized', 'Hesap kullanılamıyor.', 401);
+    if ($user && $user['status'] === 'suspended') return [null, 'suspended'];
+    return $user && $user['status'] === 'active' ? [$user, null] : [null, 'gone'];
 }
 
-/** Herkese açık uçlar (sıralama): oturum başlığı yoksa null, varsa geçerli olmalı (süresi dolduysa 401 → istemci yeniler). */
+function current_user(): array {
+    [$user, $problem] = bearer_user();
+    if ($user) return $user;
+    // Askıya alınan hesap oturumu yenileyerek kurtaramaz: 401 değil, açıklamalı 403.
+    match ($problem) {
+        'missing' => fail('unauthorized', 'Oturum gerekli.', 401),
+        'expired' => fail('unauthorized', 'Oturum süresi doldu.', 401),
+        'suspended' => fail('account_suspended', suspended_message(), 403),
+        default => fail('unauthorized', 'Hesap kullanılamıyor.', 401),
+    };
+}
+
+/**
+ * Herkese açık uçlar (sıralama): geçerli oturum varsa izleyici, yoksa (başlık yok, süresi dolmuş,
+ * silinmiş ya da askıdaki hesap) anonim. Eski/bozuk anahtarlı misafir sıralamayı yine görür;
+ * engel etiketi istemcide yerel engel listesiyle de uygulanır.
+ */
 function optional_user(): ?array {
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    return trim($header) === '' ? null : current_user();
+    return bearer_user()[0];
 }
 
 function suspended_message(): string {
-    return 'Hesabın Kullanım Koşulları ihlali nedeniyle askıya alındı. İtiraz için info@globalmedia.com.tr adresine yaz.';
+    return 'Hesabın Kullanım Koşulları ihlali nedeniyle askıya alındı. İtiraz ya da hesap silme talebi için info@globalmedia.com.tr adresine yaz.';
 }
 
 function providers(int $id): array {

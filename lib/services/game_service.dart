@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'auth_service.dart';
 
 class LeaderboardEntry {
   const LeaderboardEntry({
@@ -76,7 +77,11 @@ class GameSessionService {
   }
 
   Future<List<LeaderboardEntry>> leaderboard(String period) async {
-    final r = await api.get('/v1/leaderboard?period=$period');
+    // Misafir eski/bozuk oturum anahtarı göndermez (engel etiketi yalnız girişte anlamlı).
+    final r = await api.get(
+      '/v1/leaderboard?period=$period',
+      auth: AuthService.instance.user != null,
+    );
     return (r['entries'] as List)
         .map((e) => LeaderboardEntry.fromJson(e as Map<String, dynamic>))
         .toList();

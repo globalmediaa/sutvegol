@@ -14,6 +14,7 @@ import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
 import 'ui/logo.dart';
 import 'ui/mock_data.dart';
+import 'ui/moderation_ui.dart';
 import 'ui/pause_overlay.dart';
 import 'ui/profile_dialog.dart';
 import 'ui/theme.dart';
@@ -76,13 +77,18 @@ class _AuthGateState extends State<AuthGate> {
     listenable: AuthService.instance,
     builder: (context, _) {
       final auth = AuthService.instance;
-      if (auth.loading && auth.user == null) {
+      // Yükleme ekranı yalnız açılıştaki oturum kontrolünde: kayıt/giriş sırasında giriş
+      // ekranı yerinde kalır (yazılanlar ve koşul onayı kaybolmaz, hata mesajı görünür).
+      if (auth.loading && !auth.initialized && auth.user == null) {
         return const LoadingScreen();
       }
       if (auth.user == null && !guest) {
         return AuthScreen(onGuest: () => setState(() => guest = true));
       }
       if (auth.user?.needsUsername == true) return const UsernameScreen();
+      if (auth.user != null && auth.termsPending) {
+        return const TermsGateScreen();
+      }
       return GameScreen(
         guest: auth.user == null,
         onSignIn: () => setState(() => guest = false),

@@ -108,6 +108,9 @@ class ModerationService extends ChangeNotifier {
   final _blocked = <String>{};
   final _unblocked = <String>{};
 
+  /// Hesap değişince artar: önceki hesabın geç dönen yanıtı yeni önbelleğe yazılmaz.
+  int _generation = 0;
+
   /// Bu oyuncu engelli mi? Yerel değişiklik (bu oturumda engelle/kaldır) sunucu
   /// bayrağından önce gelir; ikisi de yoksa sunucunun `blocked` değeri.
   bool isBlocked(String? id, {bool server = false}) {
@@ -131,21 +134,27 @@ class ModerationService extends ChangeNotifier {
   );
 
   Future<void> block(String id) async {
+    final generation = _generation;
     await remote.block(id);
+    if (generation != _generation) return;
     _blocked.add(id);
     _unblocked.remove(id);
     notifyListeners();
   }
 
   Future<void> unblock(String id) async {
+    final generation = _generation;
     await remote.unblock(id);
+    if (generation != _generation) return;
     _blocked.remove(id);
     _unblocked.add(id);
     notifyListeners();
   }
 
   Future<List<BlockedPlayer>> loadBlocks() async {
+    final generation = _generation;
     final list = await remote.blocks();
+    if (generation != _generation) return list;
     _blocked
       ..clear()
       ..addAll(list.map((b) => b.id));
@@ -163,26 +172,37 @@ class ModerationService extends ChangeNotifier {
 
   /// Çıkış / hesap silme: başka hesabın engel listesi taşınmaz.
   void reset() {
+    _generation++;
     _blocked.clear();
     _unblocked.clear();
     notifyListeners();
   }
 
-  static const _termsKey = 'terms_accepted_version';
+  /// Onay hesap başınadır: aynı cihazda başka hesap kendi onayını verir.
+  static String _termsKey(String userId) => 'terms_accepted_version_$userId';
 
-  /// Bu cihazda kabul edilen koşul sürümü (0 = hiç).
-  static Future<int> acceptedTermsVersion() async {
+  /// Bu cihazda bu hesabın kabul ettiği koşul sürümü (0 = hiç).
+  static Future<int> acceptedTermsVersion(String userId) async {
     try {
-      return (await SharedPreferences.getInstance()).getInt(_termsKey) ?? 0;
+      return (await SharedPreferences.getInstance()).getInt(
+            _termsKey(userId),
+          ) ??
+          0;
     } catch (_) {
       return 0;
     }
   }
 
-  /// Kayıt / ad seçimi başarılı olunca onay sürümü cihaza yazılır (sunucu da saklar).
-  static Future<void> saveTermsAccepted([int version = kTermsVersion]) async {
+  /// Onay sürümü cihaza yazılır (sunucu da saklar; sunucuya ulaşılamazsa cihaz kaydı geçerli).
+  static Future<void> saveTermsAccepted(
+    String userId, [
+    int version = kTermsVersion,
+  ]) async {
     try {
-      await (await SharedPreferences.getInstance()).setInt(_termsKey, version);
+      await (await SharedPreferences.getInstance()).setInt(
+        _termsKey(userId),
+        version,
+      );
     } catch (_) {}
   }
 }

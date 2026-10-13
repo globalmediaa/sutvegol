@@ -20,11 +20,14 @@ declare(strict_types=1);
  *   - MOD_EXACT (kısa ya da başka anlamı olan kelimeler) yalnız bütün bir parça, tek harflerin
  *     birleşimi ("s_i_k") ya da adın tamamı olarak eşleşir: "isik", "sikke", "seksen", "nazim",
  *     "cocktail", "essex" geçer.
- *   - MOD_CONTAINS (uzun ve masum anlamı olmayan kelimeler) alt çizgisiz adın içinde aranır.
+ *   - MOD_CONTAINS (masum anlamı olmayan kelimeler) parça içinde aranır; 6+ harfli olanlar alt
+ *     çizgisiz adın tamamında da ("oros_pu"). Kısa olanlar parça sınırını aşmaz: "konyaspor_nihat"
+ *     içindeki "porn", "yeni_gg" içindeki "nigg" eşleşmez.
  *   - Taklit: MOD_RESERVED parça içinde, MOD_RESERVED_FLAT alt çizgisiz adda, MOD_RESERVED_EXACT
  *     bütün parça olarak. MOD_ALLOW'daki masum sözcükler (badminton, pineapple) önce çıkarılır.
  *   - Harf tekrarı hoş görülür ("siiiktir"); çift harfli kelimede en az o kadar harf gerekir
- *     ("ass" için "as" eşleşmez).
+ *     ("ass" için "as" eşleşmez). Bütün parça kelimelerinde (MOD_EXACT) tekrar ancak belirgin
+ *     uzatmaysa (en az iki fazla harf) sayılır: "book"/"mood"/"seeks" geçer, "siiik" eşleşir.
  * İstemci listeyi taşımaz; tek doğruluk kaynağı sunucudur (backend/tests/moderation_unit_test.php).
  */
 
@@ -73,12 +76,13 @@ const MOD_CONTAINS = [
     'anasinisik', 'bacinisik', 'avradini', 'yarrak', 'yarram', 'yarrag', 'dalyarak', 'tassak', 'pezevenk', 'kahpe',
     'kahbe', 'kaltak',
     'kancik', 'surtuk', 'fahise', 'kerhane', 'gavat', 'yavsak', 'serefsiz', 'namussuz', 'haysiyetsiz', 'gerizekali',
-    'dangalak', 'embesil', 'gotveren', 'gotlek', 'ibnelik', 'ibneler', 'pickurusu', 'tecavuz', 'pedofil',
+    'dangalak', 'embesil', 'gotveren', 'gotlek', 'ibne', 'pickurusu', 'tecavuz', 'pedofil', 'amkcoc', 'sikiyo',
+    'siktig', 'sikkafa', 'sikici', 'pezeveng',
     // EN
     'fuck', 'fcuk', 'fvck', 'phuck', 'bullshit', 'shithead', 'shitface', 'bitch', 'bastard', 'asshole', 'dickhead',
-    'cocksucker', 'whore', 'wanker', 'bollocks', 'jerkoff', 'motherf', 'porn', 'titties', 'dildo', 'blowjob',
-    'handjob', 'rimjob', 'masturb', 'orgasm', 'orgazm', 'hentai', 'onlyfans', 'pedophil', 'nigg', 'faggot',
-    'hitler', 'siegheil',
+    'cocksucker', 'whore', 'wanker', 'bollocks', 'jerkoff', 'porn', 'titties', 'dildo', 'blowjob', 'handjob',
+    'rimjob', 'masturb', 'orgasm', 'orgazm', 'hentai', 'onlyfans', 'pedophil', 'nigg', 'faggot', 'fck', 'nudes',
+    'kissmyass', 'dumbass', 'cuntface', 'hitler', 'siegheil', 'neonazi',
 ];
 
 /** Taklit (resmî hesap izlenimi): parça içinde aranır. */
@@ -92,10 +96,10 @@ const MOD_RESERVED_FLAT = [
 ];
 /** Taklit: yalnız bütün parça olarak ("destekci", "model", "resmiye" geçer). */
 const MOD_RESERVED_EXACT = [
-    'mod', 'destek', 'support', 'resmi', 'staff', 'sistem', 'system', 'root', 'yonetim', 'cpu', 'developer',
+    'mod', 'destek', 'support', 'resmi', 'staff', 'yonetim', 'cpu', 'developer',
 ];
 /** Bir yasaklı kelimeyi içeren masum sözcükler; aramadan önce çıkarılır. */
-const MOD_ALLOW = ['badminton', 'pineapple', 'grapple', 'snapple', 'scrapple', 'dapple'];
+const MOD_ALLOW = ['badminton', 'pineapple', 'grapple', 'snapple', 'scrapple', 'dapple', 'spor'];
 
 // ------------------------------------------------------------------ saf filtre fonksiyonları
 
@@ -149,18 +153,34 @@ function mod_pattern(string $word): string {
     return $out;
 }
 
+/**
+ * Bütün parça kelimeleri için: harf grubu ya tam sayıda ya da en az iki fazla ("bok" → "book"
+ * eşleşmez, "boook" eşleşir). Kısa kelimede çift ünlü çoğu zaman başka bir kelimedir.
+ */
+function mod_pattern_strict(string $word): string {
+    preg_match_all('/(.)\1*/', $word, $m);
+    $out = '';
+    foreach ($m[0] as $run) {
+        $n = strlen($run); $c = preg_quote($run[0], '/');
+        $out .= '(?:' . $c . '{' . $n . '}|' . $c . '{' . ($n + 2) . ',})';
+    }
+    return $out;
+}
+
 function mod_regex(string $list): string {
     static $cache = [];
     if (isset($cache[$list])) return $cache[$list];
-    [$words, $whole] = match ($list) {
-        'exact' => [MOD_EXACT, true],
-        'contains' => [MOD_CONTAINS, false],
-        'reserved' => [MOD_RESERVED, false],
-        'reserved_whole' => [array_merge(MOD_RESERVED, MOD_RESERVED_FLAT), true],
-        'reserved_flat' => [MOD_RESERVED_FLAT, false],
-        'reserved_exact' => [MOD_RESERVED_EXACT, true],
+    $long = array_values(array_filter(MOD_CONTAINS, fn($w) => strlen($w) >= 6));
+    [$words, $whole, $strict] = match ($list) {
+        'exact' => [MOD_EXACT, true, true],
+        'contains' => [MOD_CONTAINS, false, false],
+        'contains_long' => [$long, false, false],
+        'reserved' => [MOD_RESERVED, false, false],
+        'reserved_whole' => [array_merge(MOD_RESERVED, MOD_RESERVED_FLAT), true, false],
+        'reserved_flat' => [MOD_RESERVED_FLAT, false, false],
+        'reserved_exact' => [MOD_RESERVED_EXACT, true, true],
     };
-    $alt = implode('|', array_map('mod_pattern', $words));
+    $alt = implode('|', array_map($strict ? 'mod_pattern_strict' : 'mod_pattern', $words));
     return $cache[$list] = $whole ? "/^(?:$alt)$/" : "/(?:$alt)/";
 }
 
@@ -182,7 +202,11 @@ function mod_name_reason(string $name): ?string {
             if (preg_match(mod_regex('reserved_exact'), $u)) return 'impersonation';
         }
         $clean = mod_strip_allowed($flat);
-        if (preg_match(mod_regex('contains'), $clean)) return 'profanity';
+        foreach ($units as $u) {
+            if (preg_match(mod_regex('contains'), mod_strip_allowed($u))) return 'profanity';
+        }
+        // Uzun kelimeler bölünse de yakalanır ("oros_pu"); kısalar parça sınırını aşmaz.
+        if (preg_match(mod_regex('contains_long'), $clean)) return 'profanity';
         if (preg_match(mod_regex('reserved_flat'), $clean) || preg_match(mod_regex('reserved_whole'), $flat)) return 'impersonation';
         foreach ($units as $u) {
             if (preg_match(mod_regex('reserved'), mod_strip_allowed($u))) return 'impersonation';
@@ -191,9 +215,14 @@ function mod_name_reason(string $name): ?string {
     return null;
 }
 
-/** Yönetici yasağının saklanan normal biçimi: uç rakamsız leet, alt çizgisiz, tekrarsız. */
+/**
+ * Yönetici yasağının saklanan normal biçimi: uç rakamsız leet, alt çizgisiz, tekrarsız. Kısa kökler
+ * ("ali_34" → "ali") ve sistemin verdiği "oyuncu_NNNN" yalnız tam adıyla yasaklanır (boş norm);
+ * aksi halde masum binlerce ad (ali1907, oyuncu_…) reddedilirdi.
+ */
 function mod_ban_norm(string $name): string {
-    return mod_squeeze(implode('', mod_forms($name)['edge']));
+    $norm = mod_squeeze(implode('', mod_forms($name)['edge']));
+    return strlen($norm) >= 5 && $norm !== 'oyuncu' ? $norm : '';
 }
 
 /** Aday adın yasak listesiyle karşılaştırılacak normal biçimleri (dört biçimin hepsi). */
@@ -255,14 +284,23 @@ function terms_version_from(array $data): ?int {
     return is_int($v) && $v >= 1 && $v <= TERMS_VERSION ? $v : null;
 }
 
-/** user_id → mevcut adı en az 3 farklı kişiden açık "username" şikâyeti almış mı. */
-function mod_hidden_ids(array $userIds): array {
+/**
+ * user_id → ['hidden' => mevcut ada en az 3 farklı kişiden açık "username" şikâyeti var ve yönetici
+ * bu adı onaylamamış, 'cleared' => yönetici mevcut adı inceleyip reddetmiş (users.name_cleared_key)].
+ * Onaylanan ad yeni şikâyetlerle (sahte hesaplar dahil) yeniden gizlenemez; ad değişince onay düşer.
+ */
+function mod_name_flags(array $userIds): array {
     $ids = array_values(array_unique(array_map('intval', $userIds)));
     if (!$ids) return [];
-    $rows = mod_query('SELECT r.target_id FROM user_reports r JOIN users u ON u.id=r.target_id
-        WHERE r.status="open" AND r.reason="username" AND r.reported_name=u.username AND r.target_id IN (' . mod_in($ids) . ')
-        GROUP BY r.target_id HAVING COUNT(DISTINCT r.reporter_id)>=' . MOD_HIDE_THRESHOLD, $ids)->fetchAll(PDO::FETCH_COLUMN);
-    return array_fill_keys(array_map('intval', $rows), true);
+    $rows = mod_query('SELECT u.id,(u.name_cleared_key IS NOT NULL AND u.name_cleared_key=u.username_key) cleared,
+        (SELECT COUNT(DISTINCT r.reporter_id) FROM user_reports r WHERE r.target_id=u.id AND r.status="open" AND r.reason="username" AND r.reported_name=u.username) votes
+        FROM users u WHERE u.id IN (' . mod_in($ids) . ')', $ids)->fetchAll();
+    $out = [];
+    foreach ($rows as $r) {
+        $cleared = (bool) (int) $r['cleared'];
+        $out[(int) $r['id']] = ['cleared' => $cleared, 'hidden' => !$cleared && (int) $r['votes'] >= MOD_HIDE_THRESHOLD];
+    }
+    return $out;
 }
 
 /** $viewer'ın engellediği kullanıcılar (id → true). */
@@ -281,17 +319,20 @@ function mod_pair_blocked(int $a, int $b): bool {
 /**
  * Başka oyunculara gösterilecek adlar. $rows: [['id'=>int, 'public_id'=>string, 'username'=>?string], ...].
  * İzleyicinin kendisi → kendi adı; engellediği → "Engellenen oyuncu"; 3 şikâyetle gizlenen ya da filtreye
- * takılan (eski) ad → "Oyuncu#XXXX". Dönüş: id → ['name'=>string, 'blocked'=>bool, 'hidden'=>bool].
+ * takılan (eski) ad → "Oyuncu#XXXX" (yönetici onayladıysa görünür).
+ * Dönüş: id → ['name'=>string, 'blocked'=>bool, 'hidden'=>bool].
  */
 function mod_public_names(?int $viewer, array $rows, bool $applyBlocks = true): array {
     $ids = array_map(fn($r) => (int) $r['id'], $rows);
-    $hidden = mod_hidden_ids($ids);
+    $flags = mod_name_flags($ids);
     $blocked = $viewer !== null && $applyBlocks ? mod_blocked_by($viewer, $ids) : [];
     $out = [];
     foreach ($rows as $r) {
         $id = (int) $r['id']; $name = $r['username'] ?? null;
         if ($viewer !== null && $id === $viewer) { $out[$id] = ['name' => $name ?? 'Oyuncu', 'blocked' => false, 'hidden' => false]; continue; }
-        $isHidden = isset($hidden[$id]) || ($name !== null && mod_name_reason((string) $name) !== null);
+        // Yöneticinin onayladığı ad filtre yanlış pozitifi olsa da görünür.
+        $cleared = $flags[$id]['cleared'] ?? false;
+        $isHidden = ($flags[$id]['hidden'] ?? false) || (!$cleared && $name !== null && mod_name_reason((string) $name) !== null);
         $label = isset($blocked[$id]) ? MOD_BLOCKED_LABEL : ($name === null ? 'Oyuncu' : ($isHidden ? mod_hidden_label((string) $r['public_id']) : (string) $name));
         $out[$id] = ['name' => $label, 'blocked' => isset($blocked[$id]), 'hidden' => $isHidden];
     }
@@ -345,8 +386,14 @@ function mod_report(array $user, array $data): array {
     // Aynı kişi → aynı hedef: tek kayıt güncellenir. Reddedilmiş şikâyet aynı ad ve sebeple yeniden açılmaz.
     $same = $existing['status'] === 'dismissed' && $existing['reason'] === $reason
         && username_key((string) $existing['reported_name']) === username_key((string) $name);
-    mod_query('UPDATE user_reports SET status=?,reason=?,context=?,duel_id=?,note=?,reported_name=?,resolved_at=IF(?="open",NULL,resolved_at),updated_at=NOW() WHERE id=?',
-        [$same ? 'dismissed' : 'open', $reason, $context, $duelId, $note, $name, $same ? 'dismissed' : 'open', $existing['id']]);
+    $status = $same ? 'dismissed' : 'open';
+    // Kapanmış kaydın yeniden açılması yeni şikâyet sayılır: günlük sınıra girer, 24 saat sayacı baştan.
+    $reopen = $status === 'open' && $existing['status'] !== 'open';
+    if ($reopen && (int) mod_query('SELECT COUNT(*) FROM user_reports WHERE reporter_id=? AND created_at>=DATE_SUB(NOW(),INTERVAL 1 DAY)', [$uid])->fetchColumn() >= MOD_REPORTS_PER_DAY) {
+        fail('report_limit', 'Bugün çok fazla şikâyet gönderdin. Yarın yeniden dene.', 429);
+    }
+    mod_query('UPDATE user_reports SET status=?,reason=?,context=?,duel_id=?,note=?,reported_name=?,resolved_at=IF(?="open",NULL,resolved_at),created_at=IF(?,NOW(),created_at),updated_at=NOW() WHERE id=?',
+        [$status, $reason, $context, $duelId, $note, $name, $status, $reopen ? 1 : 0, $existing['id']]);
     return ['ok' => true, 'reported' => true];
 }
 
@@ -380,7 +427,16 @@ function mod_blocks(array $user): array {
     ], $rows)];
 }
 
+/** Mevcut hesabın Kullanım Koşulları onayı (kayıttan önce açılmış hesaplar uygulamada bir kez onaylar). */
+function mod_accept_terms(array $user, array $data): array {
+    $version = terms_version_from($data);
+    if ($version === null) fail('invalid_terms', 'Kullanım Koşulları sürümü geçersiz.');
+    mod_query('UPDATE users SET terms_version=GREATEST(COALESCE(terms_version,0),?),terms_accepted_at=NOW() WHERE id=?', [$version, (int) $user['id']]);
+    return ['ok' => true, 'termsVersion' => max($version, (int) ($user['terms_version'] ?? 0))];
+}
+
 function moderation_route(string $method, string $path, array $user): array {
+    if ($path === '/v1/me/terms' && $method === 'POST') return mod_accept_terms($user, body());
     if ($path === '/v1/report' && $method === 'POST') return mod_report($user, body());
     if ($path === '/v1/blocks' && $method === 'GET') return mod_blocks($user);
     if ($path === '/v1/blocks' && $method === 'POST') return mod_block($user, body());
@@ -394,7 +450,7 @@ function moderation_route(string $method, string $path, array $user): array {
  * kişisiz olarak yasak listesine eklenir. Çağıran işlem (transaction) içindedir.
  */
 function mod_forget_user(int $userId, ?string $username): void {
-    if ($username !== null && isset(mod_hidden_ids([$userId])[$userId])) {
+    if ($username !== null && (mod_name_flags([$userId])[$userId]['hidden'] ?? false)) {
         mod_query('INSERT IGNORE INTO name_bans(name_key,name_norm,user_id) VALUES(?,?,NULL)', [username_key($username), mod_ban_norm($username)]);
     }
     mod_query('DELETE FROM user_blocks WHERE blocker_id=? OR blocked_id=?', [$userId, $userId]);
@@ -404,8 +460,12 @@ function mod_forget_user(int $userId, ?string $username): void {
 
 // ------------------------------------------------------------------ yönetici eylemleri
 
-/** Açık şikâyetleri reddeder (aynı kişiler aynı ad ve sebeple yeniden açamaz). */
+/**
+ * Açık şikâyetleri reddeder ve mevcut adı onaylanmış işaretler: aynı kişiler aynı ad ve sebeple
+ * yeniden açamaz, yeni şikâyetler kuyruğa düşse de ad yeniden gizlenmez (ad değişince onay düşer).
+ */
 function mod_admin_dismiss(int $targetId): int {
+    mod_query('UPDATE users SET name_cleared_key=username_key WHERE id=? AND username_key IS NOT NULL', [$targetId]);
     return mod_query('UPDATE user_reports SET status="dismissed",resolved_at=NOW() WHERE target_id=? AND status="open"', [$targetId])->rowCount();
 }
 
@@ -415,7 +475,8 @@ function mod_admin_rename(int $targetId): ?string {
     try {
         $user = mod_query('SELECT id,username FROM users WHERE id=? AND status<>"deleted" FOR UPDATE', [$targetId])->fetch();
         if (!$user) { db()->rollBack(); return null; }
-        $names = mod_query('SELECT DISTINCT reported_name FROM user_reports WHERE target_id=? AND status="open" AND reported_name IS NOT NULL', [$targetId])->fetchAll(PDO::FETCH_COLUMN);
+        // Yasak: mevcut ad + uygunsuz ad olarak şikâyet edilen adlar (hile/diğer şikâyetindeki ad değil).
+        $names = mod_query('SELECT DISTINCT reported_name FROM user_reports WHERE target_id=? AND status="open" AND reason="username" AND reported_name IS NOT NULL', [$targetId])->fetchAll(PDO::FETCH_COLUMN);
         if ($user['username'] !== null) $names[] = $user['username'];
         foreach (array_unique(array_map('strval', $names)) as $old) {
             mod_query('INSERT IGNORE INTO name_bans(name_key,name_norm,user_id) VALUES(?,?,?)', [username_key($old), mod_ban_norm($old), $targetId]);

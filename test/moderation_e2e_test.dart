@@ -26,6 +26,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final api = ApiClient.instance;
       await api.saveTokens({'accessToken': _token, 'refreshToken': _refresh});
+      // Uygulamadaki gibi giriş yapmış oyuncu: sıralama isteği oturumla gider.
+      AuthService.instance.user = const AppUser(id: _me, username: 'e2e_ben');
       final mod = ModerationService.instance..remote = ApiModerationRemote(api);
       final board = GameSessionService();
 

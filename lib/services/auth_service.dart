@@ -98,6 +98,16 @@ class AppUser {
 
   /// Sunucuda kayıtlı kabul edilen Kullanım Koşulları sürümü (0 = kayıt yok).
   final int termsVersion;
+
+  AppUser withTerms(int version) => AppUser(
+    id: id,
+    email: email,
+    username: username,
+    displayName: displayName,
+    avatarUrl: avatarUrl,
+    providers: providers,
+    termsVersion: version,
+  );
   bool get needsUsername => username == null || username!.isEmpty;
 }
 
@@ -108,6 +118,13 @@ class AuthService extends ChangeNotifier {
   AppUser? user;
   bool loading = true;
   String? error;
+
+  /// Açılıştaki oturum kontrolü bitti mi (yükleme ekranı yalnız bu sırada gösterilir).
+  bool initialized = false;
+
+  /// Giriş yapmış (adı seçilmiş) hesap güncel Kullanım Koşulları'nı henüz onaylamadı:
+  /// kayıttan önce açılmış hesaplar uygulamada bir kez onaylar (sunucu + cihaz kaydı).
+  bool termsPending = false;
 
   Future<void> initialize() async {
     await api.restore();
@@ -127,8 +144,37 @@ class AuthService extends ChangeNotifier {
     }
     if (user != null) unawaited(ModerationService.instance.refresh());
     await _attachProgress();
+    await _updateTermsState();
     loading = false;
+    initialized = true;
     notifyListeners();
+  }
+
+  Future<void> _updateTermsState() async {
+    final u = user;
+    termsPending =
+        u != null &&
+        !u.needsUsername &&
+        u.termsVersion < kTermsVersion &&
+        await ModerationService.acceptedTermsVersion(u.id) < kTermsVersion;
+  }
+
+  /// Koşul kapısındaki onay: önce cihaza yazılır (sunucuya ulaşılamasa da oyuncu takılmaz),
+  /// sonra sunucuya gönderilir.
+  Future<void> acceptTerms() async {
+    final u = user;
+    if (u == null) return;
+    await ModerationService.saveTermsAccepted(u.id);
+    termsPending = false;
+    notifyListeners();
+    try {
+      final r = await api.post(
+        '/v1/me/terms',
+        data: {'termsVersion': kTermsVersion},
+      );
+      final v = (r['termsVersion'] as num?)?.toInt();
+      if (v != null && user?.id == u.id) user = u.withTerms(v);
+    } catch (_) {}
   }
 
   /// İlerleme hesabına bağlanır: bulut çekilip sessizce birleştirilir (yeni kurulumda
@@ -160,7 +206,9 @@ class AuthService extends ChangeNotifier {
         auth: false,
       );
       await _accept(result);
-      if (register) await ModerationService.saveTermsAccepted();
+      if (register && user != null) {
+        await ModerationService.saveTermsAccepted(user!.id);
+      }
     });
   }
 
@@ -246,7 +294,8 @@ class AuthService extends ChangeNotifier {
         data: {'username': value.trim(), 'termsVersion': kTermsVersion},
       );
       user = AppUser.fromJson(result['user'] as Map<String, dynamic>);
-      await ModerationService.saveTermsAccepted();
+      await ModerationService.saveTermsAccepted(user!.id);
+      termsPending = false;
     });
   }
 
@@ -260,6 +309,7 @@ class AuthService extends ChangeNotifier {
     await api.clear();
     ModerationService.instance.reset();
     user = null;
+    termsPending = false;
     notifyListeners();
   }
 
@@ -290,6 +340,7 @@ class AuthService extends ChangeNotifier {
     ModerationService.instance.reset();
     unawaited(ModerationService.instance.refresh());
     await _attachProgress();
+    await _updateTermsState();
   }
 
   Future<void> _run(Future<void> Function() action) async {

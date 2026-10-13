@@ -1,7 +1,7 @@
 -- Oyuncu güvenliği (build 13, App Store Guideline 1.2): şikâyet, engelleme, yönetici ad yasağı
 -- ve kullanım koşulu onayı. Yalnız eklemeli ve idempotent: deploy.sh her deploy'da tüm
 -- migration'ları yeniden uygular; mevcut tablo/satır silinmez. Yalnız users tablosuna bağlıdır
--- (diğer migration'larla sıra bağımlılığı yok). users'a eklenen iki sütun NULL'a izin verir
+-- (diğer migration'larla sıra bağımlılığı yok). users'a eklenen üç sütun NULL'a izin verir
 -- (MySQL 8.4'te anlık ALTER, tablo yeniden yazılmaz); mevcut kullanıcılar NULL kalır.
 -- Kullanıcı adıyla karşılaştırılan sütunlar users ile aynı harmanlamayı (utf8mb4_unicode_ci) kullanır.
 
@@ -48,3 +48,5 @@ CREATE TABLE IF NOT EXISTS name_bans (
 
 SET @sv = IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='terms_version')=0, 'ALTER TABLE `users` ADD COLUMN `terms_version` SMALLINT UNSIGNED NULL', 'DO 0'); PREPARE sv_stmt FROM @sv; EXECUTE sv_stmt; DEALLOCATE PREPARE sv_stmt;
 SET @sv = IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='terms_accepted_at')=0, 'ALTER TABLE `users` ADD COLUMN `terms_accepted_at` DATETIME NULL', 'DO 0'); PREPARE sv_stmt FROM @sv; EXECUTE sv_stmt; DEALLOCATE PREPARE sv_stmt;
+-- Yöneticinin inceleyip reddettiği (onayladığı) mevcut ad: yeni şikâyetler bu adı yeniden gizleyemez.
+SET @sv = IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='name_cleared_key')=0, 'ALTER TABLE `users` ADD COLUMN `name_cleared_key` VARCHAR(20) NULL', 'DO 0'); PREPARE sv_stmt FROM @sv; EXECUTE sv_stmt; DEALLOCATE PREPARE sv_stmt;

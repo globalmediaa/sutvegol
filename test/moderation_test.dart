@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,7 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sut_ve_gol/duel/duel_api.dart';
 import 'package:sut_ve_gol/duel/duel_controller.dart';
 import 'package:sut_ve_gol/duel/duel_protocol.dart';
+import 'package:sut_ve_gol/game/sfx.dart';
 import 'package:sut_ve_gol/game/shot_record.dart';
+import 'package:sut_ve_gol/main.dart';
 import 'package:sut_ve_gol/services/auth_service.dart';
 import 'package:sut_ve_gol/services/game_service.dart';
 import 'package:sut_ve_gol/services/moderation_service.dart';
@@ -25,6 +28,9 @@ class FakeModeration implements ModerationRemote {
   final blocked = <String>[];
   final unblocked = <String>[];
   List<BlockedPlayer> list = const [];
+
+  /// Verilirse engel listesi yanıtı bu tamamlanana kadar bekler (yarış testi).
+  Completer<List<BlockedPlayer>>? pending;
 
   @override
   Future<void> report({
@@ -53,7 +59,8 @@ class FakeModeration implements ModerationRemote {
   }
 
   @override
-  Future<List<BlockedPlayer>> blocks() async => list;
+  Future<List<BlockedPlayer>> blocks() async =>
+      pending != null ? pending!.future : list;
 }
 
 class FakeDuelApi implements DuelApi {
@@ -166,7 +173,9 @@ void main() {
 
   tearDown(() {
     debugUsernameCheck = null;
-    AuthService.instance.user = null;
+    AuthService.instance
+      ..user = null
+      ..termsPending = false;
     ModerationService.instance
       ..remote = ApiModerationRemote()
       ..reset();
@@ -591,5 +600,102 @@ void main() {
       expect(find.text('Engellediğin oyuncu yok'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+  });
+
+  group('mevcut hesap: Kullanım Koşulları kapısı', () {
+    testWidgets('onayı olmayan hesap oyundan önce koşul kapısını görür', (
+      tester,
+    ) async {
+      Sfx.skipInit = true;
+      AuthService.instance
+        ..user = const AppUser(id: kMe, username: 'ben_oyuncu')
+        ..termsPending = true;
+      await tester.pumpWidget(
+        MaterialApp(theme: appTheme(), home: const AuthGate()),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(TermsGateScreen), findsOneWidget);
+      expect(find.textContaining('@ben_oyuncu'), findsOneWidget);
+      expect(find.text('ÇIKIŞ YAP'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('onaysız devam yok; onay cihaza yazılır ve kapı kapanır', (
+      tester,
+    ) async {
+      AuthService.instance
+        ..user = const AppUser(id: kMe, username: 'ben_oyuncu')
+        ..termsPending = true;
+      await tester.pumpWidget(const MaterialApp(home: TermsGateScreen()));
+      await tester.pump();
+      final cont = find.descendant(
+        of: find.byKey(const Key('terms-gate-continue')),
+        matching: find.byType(GestureDetector),
+      );
+      expect(tester.widget<GestureDetector>(cont.first).onTap, isNull);
+      await tester.tap(find.byKey(const Key('terms-consent')));
+      await tester.pump();
+      expect(tester.widget<GestureDetector>(cont.first).onTap, isNotNull);
+      await tester.tap(find.byKey(const Key('terms-gate-continue')));
+      // Arka plan sürekli canlı (pumpAndSettle bitmez): sınırlı adımlar.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      // Sunucu bu testte yok: onay yine de cihazda kalır, oyuncu takılmaz.
+      expect(AuthService.instance.termsPending, false);
+      expect(await ModerationService.acceptedTermsVersion(kMe), kTermsVersion);
+      expect(await ModerationService.acceptedTermsVersion('baska'), 0);
+    });
+
+    for (final size in [const Size(320, 568), const Size(440, 956)]) {
+      testWidgets('koşul kapısı $size taşmaz', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        AuthService.instance.user = const AppUser(id: kMe, username: 'ben');
+        await tester.pumpWidget(const MaterialApp(home: TermsGateScreen()));
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
+  group('engel önbelleği', () {
+    testWidgets(
+      'yerel engel listesi sıralamada sunucu etiketinden önce gelir',
+      (tester) async {
+        fake.list = const [BlockedPlayer(id: kOther, name: 'rakip_oyuncu')];
+        await ModerationService.instance.loadBlocks();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LeaderboardScreen(
+              myScore: 0,
+              loader: (_) async => const [
+                LeaderboardEntry(
+                  id: kOther,
+                  username: 'rakip_oyuncu',
+                  score: 120,
+                  games: 2,
+                ),
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(kBlockedLabel), findsOneWidget);
+        expect(find.text('@rakip_oyuncu'), findsNothing);
+      },
+    );
+
+    test(
+      'hesap değişince eski hesabın geç gelen engel listesi yazılmaz',
+      () async {
+        fake.pending = Completer();
+        final load = ModerationService.instance.loadBlocks();
+        ModerationService.instance.reset(); // çıkış / başka hesapla giriş
+        fake.pending!.complete(const [BlockedPlayer(id: kOther, name: 'x')]);
+        await load;
+        expect(ModerationService.instance.isBlocked(kOther), false);
+      },
+    );
   });
 }

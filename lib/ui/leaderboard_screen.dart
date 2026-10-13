@@ -26,6 +26,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Future<List<LeaderboardEntry>> _load() =>
       widget.loader?.call(period) ?? service.leaderboard(period);
 
+  @override
+  void initState() {
+    super.initState();
+    // Engel listesi arka planda yüklenince etiketler hemen güncellenir.
+    ModerationService.instance.addListener(_moderationChanged);
+  }
+
+  @override
+  void dispose() {
+    ModerationService.instance.removeListener(_moderationChanged);
+    super.dispose();
+  }
+
+  void _moderationChanged() {
+    if (mounted) setState(() {});
+  }
+
   void select(String value) => setState(() {
     period = value;
     entries = _load();
@@ -99,13 +116,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     ),
   );
 
-  void _reload() => setState(() {
-    entries = _load();
-  });
+  void _reload() {
+    // Şikâyet/engel sonrası ağ beklemesinden dönülür: ekran kapanmış olabilir.
+    if (!mounted) return;
+    setState(() {
+      entries = _load();
+    });
+  }
 
   Widget _row(int index, LeaderboardEntry entry) {
     // Kalıcı kimlikle: başkasına gizlenen ad ("Oyuncu#…") kendi satırını şaşırtmaz.
     final me = entry.id == AuthService.instance.user?.id;
+    // Sunucu etiketi + yerel engel listesi (oturumu düşmüş istekte de engellenen gizli kalır).
+    final blocked =
+        !me &&
+        ModerationService.instance.isBlocked(entry.id, server: entry.blocked);
+    final name = blocked ? kBlockedLabel : entry.username;
     const medals = [FK.gold, FK.silver, FK.bronze];
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -126,14 +152,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     style: FK.t(size: 17, w: FontWeight.w700, color: FK.muted),
                   ),
           ),
-          AvatarCircle(entry.username, size: 46, ring: me ? FK.orange : null),
+          AvatarCircle(name, size: 46, ring: me ? FK.orange : null),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '@${entry.username}',
+                  blocked || name.startsWith('Oyuncu#') ? name : '@$name',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: FK.t(size: 17, w: FontWeight.w700),
                 ),
                 Text(
@@ -157,11 +185,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           else
             PlayerActionsButton(
               key: Key('lb-actions-${entry.id}'),
-              player: PlayerRef(
-                id: entry.id,
-                name: entry.username,
-                blocked: entry.blocked,
-              ),
+              player: PlayerRef(id: entry.id, name: name, blocked: blocked),
               reportContext: ReportContext.leaderboard,
               onChanged: _reload,
             ),
