@@ -158,4 +158,54 @@ class Server:
             {"email": f"{name}@test.local", "password": "password1", "username": name},
         )
         assert status == 200 and r.get("ok"), (status, r)
+        mysql("DELETE FROM api_rate_limits")  # testler IP başı kayıt sınırına takılmasın
         return {"token": r["accessToken"], "refresh": r["refreshToken"], "user": r["user"], "name": name}
+
+
+def stage_for(score: int) -> str:
+    return "stadium" if score >= 1200 else "cage" if score >= 700 else "beach" if score >= 300 else "street"
+
+
+class V2Run:
+    """Düello v2 skor kuralının sunucudan bağımsız Python karşılığı; geçerli olay üretir.
+
+    Gol 30 × combo (x1→x2→x3, tavan 3); 5. ardışık golde Kral Modu (10 sn, sabit x2);
+    ıskalama/timeout combo'yu ve Kral Modu'nu sıfırlar, maçı bitirmez.
+    """
+
+    def __init__(self):
+        self.t = self.seq = self.score = self.shots = self.hits = self.misses = 0
+        self.streak = self.max_streak = self.fever_hits = self.fever_t = 0
+        self.fever = False
+
+    def event(self, hit=True, dt=1500, timeout=False):
+        self.t += dt
+        t, stage = self.t, stage_for(self.score)
+        self.seq += 1
+        self.shots += 1
+        if timeout or not hit:
+            hit = False
+            self.misses += 1
+            self.streak, self.fever, self.fever_t, mult = 0, False, 0, 0
+        else:
+            self.hits += 1
+            if self.fever and t < self.fever_t + 10000:
+                mult = 2
+                self.streak += 1
+                self.fever_hits += 1
+            else:
+                self.streak = (0 if self.fever else self.streak) + 1
+                mult = min(3, self.streak)
+                self.fever = self.streak >= 5
+                self.fever_t = t if self.fever else 0
+            self.score += 30 * mult
+            self.max_streak = max(self.max_streak, self.streak)
+        return dict(v=2, seq=self.seq, t=t, stage=stage, view="wide",
+                    target=[660, 1350], chord=[0, 0] if timeout else [0, -500], dev=0,
+                    tMax=0 if timeout else .5, power=0 if timeout else .5,
+                    keeper=[None, None], path="timeout" if timeout else ("net" if hit else "out"),
+                    hit=hit, end=[0, 0] if timeout else [660, 1350], drop=None,
+                    score=self.score, streak=self.streak, fever=self.fever,
+                    feverLeft=round(max(0, (self.fever_t + 10000 - t) / 1000), 2) if self.fever else 0,
+                    shots=self.shots, hits=self.hits, misses=self.misses,
+                    feverHits=self.fever_hits, maxStreak=self.max_streak, mult=mult)

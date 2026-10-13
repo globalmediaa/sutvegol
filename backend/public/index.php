@@ -25,7 +25,7 @@ if (str_starts_with($path, '/v1/duels/')) {
 }
 
 if ($path === '/health') {
-    try { db()->query('SELECT 1'); output(['ok'=>true,'service'=>'sut-ve-gol','duelVersion'=>1,'time'=>gmdate('c')]); }
+    try { db()->query('SELECT 1'); output(['ok'=>true,'service'=>'sut-ve-gol','duelVersion'=>2,'time'=>gmdate('c')]); }
     catch (Throwable $e) { fail('unhealthy','Servis hazırlanıyor.',503); }
 }
 

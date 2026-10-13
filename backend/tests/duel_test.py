@@ -3,16 +3,18 @@
 import copy
 import concurrent.futures
 import unittest
-from harness import Server, reset_schema, mysql
+from harness import Server, reset_schema, mysql, V2Run
 
 
 def shot(seq=1, hit=True, hits=None, misses=0):
-    hits = seq if hits is None else hits
-    return dict(v=1,seq=seq,t=(seq-1)*400,stage='street',view='wide',
-      target=[660,1350],chord=[0,-500],dev=0,tMax=.5,power=.5,
-      keeper=[None,None],path='net',hit=hit,end=[660,1350],drop=None,
-      score=hits*30,lives=3-misses,streak=hits if hit else 0,fever=False,
-      feverLeft=0,shots=seq,hits=hits,misses=misses,feverHits=0,maxStreak=hits)
+    """v2 olay: ilk `hits` gol ardışık (combo x1→x2→x3), sonra ıskalama."""
+    run = V2Run()
+    for i in range(seq):
+        e = run.event(hit=hit if i == seq - 1 else (i < (hits if hits is not None else seq)), dt=1500)
+    return e
+
+
+Q = {'duelVersion': 2}
 
 
 class Duels(unittest.TestCase):
@@ -28,11 +30,11 @@ class Duels(unittest.TestCase):
     def tearDownClass(cls): cls.server.__exit__()
 
     def pair(self,a,b):
-        self.assertEqual(self.s.post('/v1/duels/queue',{},a['token'])[1]['status'],'waiting')
-        s,r=self.s.post('/v1/duels/queue',{},b['token']); self.assertEqual(s,200)
+        self.assertEqual(self.s.post('/v1/duels/queue',Q,a['token'])[1]['status'],'waiting')
+        s,r=self.s.post('/v1/duels/queue',Q,b['token']); self.assertEqual(s,200)
         match=r['duel']; id=match['id']
         ra=self.s.get('/v1/duels/'+id,a['token'])[1]['duel']
-        mysql(f"UPDATE duels SET starts_at_ms=UNIX_TIMESTAMP(NOW(3))*1000-2000,ends_at_ms=UNIX_TIMESTAMP(NOW(3))*1000+88000 WHERE id='{id}'")
+        mysql(f"UPDATE duels SET starts_at_ms=UNIX_TIMESTAMP(NOW(3))*1000-30000,ends_at_ms=UNIX_TIMESTAMP(NOW(3))*1000+60000 WHERE id='{id}'")
         return id,ra['nonce'],match['nonce']
 
     def test_01_event_integrity_and_result(self):
@@ -63,32 +65,35 @@ class Duels(unittest.TestCase):
 
     def test_02_concurrent_queue_forfeit_cancel(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            responses=list(pool.map(lambda u:self.s.post('/v1/duels/queue',{},u['token']),[self.c,self.d]))
+            responses=list(pool.map(lambda u:self.s.post('/v1/duels/queue',Q,u['token']),[self.c,self.d]))
         self.assertTrue(all(s==200 for s,_ in responses),responses)
         matches=[r['duel']['id'] for _,r in responses if 'duel' in r]
         self.assertEqual(len(set(matches)),1)
-        id=matches[0]; r=self.s.post('/v1/duels/queue',{},self.c['token'])[1]
+        id=matches[0]; r=self.s.post('/v1/duels/queue',Q,self.c['token'])[1]
         self.assertEqual(r['duel']['id'],id)
         s,r=self.s.delete('/v1/duels/queue',token=self.c['token']); self.assertEqual(s,200)
         self.assertEqual(r['duel']['result']['winnerId'],self.d['user']['id'])
         self.assertEqual(mysql(f"SELECT COUNT(*) FROM duel_players WHERE duel_id='{id}'").strip().splitlines()[-1],'2')
-        self.assertEqual(self.s.post('/v1/duels/queue',{},self.c['token'])[1]['status'],'waiting')
+        self.assertEqual(self.s.post('/v1/duels/queue',Q,self.c['token'])[1]['status'],'waiting')
         self.s.delete('/v1/duels/queue',token=self.c['token'])
 
-    def test_03_lives_timeout_stale_tickets(self):
-        self.s.post('/v1/duels/queue',{},self.e['token'])
+    def test_03_no_lives_timeout_stale_tickets(self):
+        self.s.post('/v1/duels/queue',Q,self.e['token'])
         mysql("UPDATE duel_queue SET last_seen_ms=0")
-        self.assertEqual(self.s.post('/v1/duels/queue',{},self.f['token'])[1]['status'],'waiting')
+        self.assertEqual(self.s.post('/v1/duels/queue',Q,self.f['token'])[1]['status'],'waiting')
         self.s.delete('/v1/duels/queue',token=self.f['token'])
         id,ne,nf=self.pair(self.e,self.f)
         path='/v1/duels/'+id
-        events=[shot(i,hit=False,hits=0,misses=i) for i in range(1,4)]
+        run=V2Run(); events=[run.event(hit=False) for _ in range(4)]
         s,r=self.s.post(path+'/events',dict(nonce=ne,events=events),self.e['token']); self.assertEqual(s,200,r)
-        self.assertTrue(next(p for p in r['duel']['players'] if p['id']==self.e['user']['id'])['finished'])
-        self.assertEqual(self.s.post(path+'/events',dict(nonce=ne,events=[shot(4,hit=False,hits=0,misses=4)]),self.e['token'])[0],409)
+        me=next(p for p in r['duel']['players'] if p['id']==self.e['user']['id'])
+        # Can sistemi yok: 4 ıskalama maçı bitirmez, combo sıfır kalır.
+        self.assertFalse(me['finished']); self.assertEqual(me['combo'],0)
+        self.assertEqual(self.s.post(path+'/events',dict(nonce=ne,events=[run.event(hit=True)]),self.e['token'])[0],200)
         mysql(f"UPDATE duels SET ends_at_ms=0 WHERE id='{id}'")
         r=self.s.get(path,self.f['token'])[1]['duel']
-        self.assertEqual(r['status'],'finished'); self.assertTrue(r['result']['draw'])
+        self.assertEqual(r['status'],'finished'); self.assertFalse(r['result']['draw'])
+        self.assertEqual(r['result']['winnerId'],self.e['user']['id'])
         self.assertEqual(r['result']['reason'],'time')
 
     def test_04_account_deletion_and_apple_challenge(self):
