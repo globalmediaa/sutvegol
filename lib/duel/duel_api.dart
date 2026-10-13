@@ -5,7 +5,7 @@ import 'duel_protocol.dart';
 abstract class DuelApi {
   Future<DuelSnapshot?> queue();
   Future<void> cancelQueue();
-  Future<DuelSnapshot> poll(String id, int since);
+  Future<DuelSnapshot> poll(String id, int since, {bool withGhost = false});
   Future<DuelSnapshot> send(
     String id,
     String nonce,
@@ -14,6 +14,7 @@ abstract class DuelApi {
   );
   Future<DuelSnapshot> finish(String id, String nonce, int since);
   Future<void> forfeit(String id);
+  Future<DuelSnapshot> rematch(String id);
 }
 
 class HttpDuelApi implements DuelApi {
@@ -21,7 +22,11 @@ class HttpDuelApi implements DuelApi {
   final ApiClient api;
   @override
   Future<DuelSnapshot?> queue() async {
-    final r = await api.post('/v1/duels/queue');
+    // Sürüm bildirilmezse (build 9/11) sunucu "güncelleme gerekli" döner.
+    final r = await api.post(
+      '/v1/duels/queue',
+      data: {'duelVersion': kDuelVersion},
+    );
     return r['status'] == 'waiting' ? null : DuelSnapshot.fromResponse(r);
   }
 
@@ -31,8 +36,13 @@ class HttpDuelApi implements DuelApi {
   }
 
   @override
-  Future<DuelSnapshot> poll(String id, int since) async =>
-      DuelSnapshot.fromResponse(await api.get('/v1/duels/$id?since=$since'));
+  Future<DuelSnapshot> poll(
+    String id,
+    int since, {
+    bool withGhost = false,
+  }) async => DuelSnapshot.fromResponse(
+    await api.get('/v1/duels/$id?since=$since${withGhost ? '&ghost=1' : ''}'),
+  );
   @override
   Future<DuelSnapshot> send(
     String id,
@@ -61,4 +71,8 @@ class HttpDuelApi implements DuelApi {
   Future<void> forfeit(String id) async {
     await api.post('/v1/duels/$id/forfeit');
   }
+
+  @override
+  Future<DuelSnapshot> rematch(String id) async =>
+      DuelSnapshot.fromResponse(await api.post('/v1/duels/$id/rematch'));
 }

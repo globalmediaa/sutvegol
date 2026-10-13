@@ -3,6 +3,7 @@ import 'dart:ui' hide TextStyle;
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
+import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'sut_ve_gol_game.dart';
 import 'geometry.dart';
@@ -76,6 +77,59 @@ class Scoreboard extends PositionComponent with HasGameReference<SutVeGolGame> {
       color,
     );
     canvas.restore();
+  }
+}
+
+/// Düello şut saati: bekleyen topun çevresinde azalan halka + saniye. Süre
+/// dolunca oyun otomatik ıskalama kaydeder (combo sıfırlanır).
+class ShotClockRing extends PositionComponent
+    with HasGameReference<SutVeGolGame> {
+  ShotClockRing() : super(priority: 25);
+
+  static const Color amber = Color(0xFFFFB13B);
+  static const Color red = Color(0xFFFF3B5C);
+
+  @override
+  void render(Canvas canvas) {
+    if (!game.shotClockVisible) return;
+    const total = SutVeGolGame.shotClockSeconds;
+    final left = game.shotClock.clamp(0.0, total);
+    final g = game.view;
+    final c = g.ballRest.toOffset();
+    final r = kBallDiameter / 2 * g.ballRestScale + 10;
+    final color = left < 2 ? red : amber;
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..color = const Color(0x33FFFFFF),
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r),
+      -pi / 2,
+      2 * pi * left / total,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
+    TextPaint(
+      style: TextStyle(
+        fontSize: 64,
+        fontWeight: FontWeight.w900,
+        color: color,
+        fontFamily: 'TitilliumWeb',
+      ),
+    ).render(
+      canvas,
+      '${left.ceil()}',
+      Vector2(c.dx, c.dy - r - 52),
+      anchor: Anchor.center,
+    );
   }
 }
 

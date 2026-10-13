@@ -2,8 +2,9 @@ import 'package:flame/components.dart';
 
 import 'geometry.dart';
 
-/// Topun kale düzlemine ulaştığında izlediği yol.
-enum ShotPath { net, keeper, post, out }
+/// Topun kale düzlemine ulaştığında izlediği yol. [timeout]: düelloda şut saati
+/// (5 sn) doldu, şut atılmadı; otomatik ıskalama sayılır (combo sıfırlanır).
+enum ShotPath { net, keeper, post, out, timeout }
 
 /// Bir şutun tam kaydı: girdi (kaydırma), o andaki sahne durumu ve şutu atan
 /// cihazın HESAPLADIĞI sonuç + sonuç sonrası durum. Düelloda rakibe bu kayıt
@@ -27,7 +28,6 @@ class ShotRecord {
     required this.end,
     required this.drop,
     required this.score,
-    required this.lives,
     required this.streak,
     required this.fever,
     required this.feverLeft,
@@ -36,9 +36,11 @@ class ShotRecord {
     required this.misses,
     required this.feverHits,
     required this.maxStreak,
+    required this.mult,
   });
 
-  static const int version = 1;
+  /// Düello protokolü v2: can yok, şut saati (timeout), combo çarpanı.
+  static const int version = 2;
 
   /// Kayıt sırası (1'den başlar, boşluksuz).
   final int seq;
@@ -71,7 +73,6 @@ class ShotRecord {
 
   /// Sonuç uygulandıktan SONRAKİ durum (yetkili değerler).
   final int score;
-  final int lives;
   final int streak;
   final bool fever;
   final double feverLeft;
@@ -80,6 +81,9 @@ class ShotRecord {
   final int misses;
   final int feverHits;
   final int maxStreak;
+
+  /// Bu şutta uygulanan puan çarpanı: ıskalama 0, gol x1..x3 (Kral Modu'nda x2).
+  final int mult;
 
   Map<String, dynamic> toJson() => {
     'v': version,
@@ -98,7 +102,6 @@ class ShotRecord {
     'end': _vec(end),
     'drop': drop == null ? null : _vec(drop!),
     'score': score,
-    'lives': lives,
     'streak': streak,
     'fever': fever,
     'feverLeft': _r(feverLeft),
@@ -107,6 +110,7 @@ class ShotRecord {
     'misses': misses,
     'feverHits': feverHits,
     'maxStreak': maxStreak,
+    'mult': mult,
   };
 
   /// Uzaktan gelen kaydı doğrulayarak çözer; geçersiz/aralık dışı değerlerde
@@ -148,7 +152,6 @@ class ShotRecord {
       end: _vecFrom(j['end'], 'end'),
       drop: j['drop'] == null ? null : _vecFrom(j['drop'], 'drop'),
       score: _int(j['score'], 0, 100000, 'score'),
-      lives: _int(j['lives'], 0, 3, 'lives'),
       streak: _int(j['streak'], 0, 10000, 'streak'),
       fever: _bool(j['fever'], 'fever'),
       feverLeft: _num(j['feverLeft'], 0, 10, 'feverLeft'),
@@ -157,16 +160,24 @@ class ShotRecord {
       misses: _int(j['misses'], 0, 10000, 'misses'),
       feverHits: _int(j['feverHits'], 0, 10000, 'feverHits'),
       maxStreak: _int(j['maxStreak'], 0, 10000, 'maxStreak'),
+      mult: _int(j['mult'], 0, 3, 'mult'),
     );
   }
 
-  /// Sayaçların kendi içinde tutarlı olup olmadığı (sunucu kuralıyla aynı).
+  bool get isTimeout => path == ShotPath.timeout;
+
+  /// Sayaçların kendi içinde tutarlı olup olmadığı. Skorun combo geçişi
+  /// sunucuda önceki duruma göre doğrulanır; burada tek kaydın iç tutarlılığı.
   bool get consistent =>
-      hits + misses <= shots &&
+      hits + misses == shots &&
       feverHits <= hits &&
-      score == (hits - feverHits) * 30 + feverHits * 60 &&
+      streak <= maxStreak &&
+      maxStreak <= hits &&
+      (hit ? mult >= 1 : mult == 0) &&
       (!fever || feverLeft > 0) &&
-      (path != ShotPath.out || !hit);
+      score <= hits * 90 &&
+      (path != ShotPath.out || !hit) &&
+      (path != ShotPath.timeout || !hit);
 
   static List<double> _vec(Vector2 v) => [_r(v.x), _r(v.y)];
 

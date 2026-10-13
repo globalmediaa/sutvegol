@@ -124,6 +124,19 @@ class SutVeGolGame extends FlameGame {
   static const int feverStreak = 5;
   static const double feverDuration = 10;
 
+  /// Düello v2: can yok; şut başına süre (s). Dolarsa otomatik ıskalama.
+  static const double shotClockSeconds = 5;
+  double shotClock = shotClockSeconds;
+
+  /// Düello combo çarpanı tavanı (x1 → x2 → x3); Kral Modu'nda sabit x2.
+  static const int maxComboMult = 3;
+
+  /// Son golde uygulanan çarpan (kayda yazılır).
+  int lastMult = 0;
+
+  /// Şut saati yalnız yerel düello oyuncusunda, top beklerken işler.
+  bool get shotClockVisible => mode == GameMode.duel && state == GameState.idle;
+
   late final SceneRoot scene;
   late final Background background;
   late final Ball ball;
@@ -249,6 +262,7 @@ class SutVeGolGame extends FlameGame {
         splash = SplashLayer();
         world.addAll([scene, input, splash!]);
       case GameMode.duel:
+        scene.add(ShotClockRing());
         world.addAll([scene, input]);
       case GameMode.replica:
         world.add(scene); // giriş katmanı yok: dokunuşlar işlenmez
@@ -350,6 +364,10 @@ class SutVeGolGame extends FlameGame {
       if (feverTime <= 0) endFever();
     }
     if (kAutoplay && !isReplica) _autoplay(dt);
+    if (shotClockVisible) {
+      shotClock -= dt;
+      if (shotClock <= 0) _shotTimeout();
+    }
     if (_queue.isEmpty) return;
     final due = _queue.where((s) => s.at <= _clock).toList();
     _queue.removeWhere((s) => s.at <= _clock);
@@ -431,6 +449,7 @@ class SutVeGolGame extends FlameGame {
     if (state != GameState.gameOver && state != GameState.paused) {
       state = GameState.idle;
     }
+    shotClock = shotClockSeconds;
     if (kFeverTest && !fever) startFever();
     if (isReplica) _drainInbox();
     if (_tutorialPending && state == GameState.idle) {
@@ -564,6 +583,7 @@ class SutVeGolGame extends FlameGame {
         _pendingHit = false;
         ball.drop(end, f.drop?.clone() ?? Vector2(end.x, g.groundY - r));
       case ShotPath.out:
+      case ShotPath.timeout:
         _pendingHit = false;
         final velocity = ball.flightVelocity;
         ball.flyOut(
@@ -652,8 +672,13 @@ class SutVeGolGame extends FlameGame {
   void _hit(Vector2 end, double r) {
     final f = _forced;
     final before = score;
-    final gain = fever ? 60 : 30;
-    score += gain;
+    // Solo: 30, Kral Modu 60 (tek kişilik sıralama kuralı değişmez).
+    // Düello: 30 × combo (x1→x2→x3), Kral Modu'nda sabit x2.
+    final mult = !isDuel
+        ? (fever ? 2 : 1)
+        : (f?.mult ?? (fever ? 2 : min(maxComboMult, streak + 1)));
+    lastMult = mult;
+    score += 30 * mult;
     runHits++;
     if (fever) runFeverHits++;
     streak++;
@@ -667,7 +692,7 @@ class SutVeGolGame extends FlameGame {
     scene.add(
       ScorePopup(
         target.position.clone(),
-        '+${score - before}',
+        isDuel && mult > 1 ? '+${score - before} x$mult' : '+${score - before}',
         color: fever ? const Color(0xFFFFE066) : const Color(0xFFFFFFFF),
       ),
     );
@@ -691,14 +716,16 @@ class SutVeGolGame extends FlameGame {
     final f = _forced;
     runMisses++;
     streak = 0;
-    lives = max(0, lives - 1);
+    lastMult = 0;
+    // Düelloda can yok: ıskalama yalnız combo'yu sıfırlar, maçı süre bitirir.
+    if (!isDuel) lives = max(0, lives - 1);
     if (f != null) _syncFromRecord(f);
     scoreboard.flashHeart();
     sfx(Sfx.miss);
     haptic(HapticFeedback.lightImpact);
     if (f == null && fever) endFever();
 
-    if (lives == 0) {
+    if (!isDuel && lives == 0) {
       _emitRecord(hit: false);
       schedule(0.7, () {
         state = GameState.gameOver;
@@ -733,7 +760,6 @@ class SutVeGolGame extends FlameGame {
       end: c.end,
       drop: c.drop,
       score: score,
-      lives: lives,
       streak: streak,
       fever: fever,
       feverLeft: fever ? max(0, feverTime) : 0,
@@ -742,6 +768,7 @@ class SutVeGolGame extends FlameGame {
       misses: runMisses,
       feverHits: runFeverHits,
       maxStreak: runMaxStreak,
+      mult: hit ? lastMult : 0,
     );
     onShotResolved?.call(record);
   }
@@ -750,7 +777,6 @@ class SutVeGolGame extends FlameGame {
   void _syncFromRecord(ShotRecord f) {
     _forced = null;
     score = f.score;
-    lives = f.lives;
     streak = f.streak;
     runShots = f.shots;
     runHits = f.hits;
@@ -834,6 +860,14 @@ class SutVeGolGame extends FlameGame {
     }
     _inbox.removeAt(0);
     _lastApplied = r.seq;
+    if (r.isTimeout) {
+      // Rakibin şut saati doldu: top yerinde kalır, ıskalama + combo sıfır.
+      _forced = r;
+      _timeoutPopup();
+      _miss(ball.position, 0);
+      _drainInbox();
+      return;
+    }
     if (r.target != null) target.spawnAt(r.target!);
     for (var i = 0; i < keepers.length && i < r.keeper.length; i++) {
       keepers[i].syncTime(r.keeper[i]);
@@ -859,11 +893,6 @@ class SutVeGolGame extends FlameGame {
     _afterShot();
     state = GameState.resolving;
     final wanted = Stage.values.byName(r.stage);
-    if (r.lives == 0) {
-      state = GameState.gameOver;
-      onRunFinished?.call(runSummary);
-      return;
-    }
     if (wanted != stage) {
       _pendingStage = null;
       _enterStage(wanted);
@@ -872,6 +901,35 @@ class SutVeGolGame extends FlameGame {
     target.spawn(immediate: true);
     ball.enter();
   }
+
+  /// Düello şut saati doldu: şut atılmadan otomatik ıskalama kaydı (combo
+  /// sıfır, Kral Modu biter); top yerinde kalır, saat yeniden başlar.
+  void _shotTimeout() {
+    input.cancelGesture();
+    shotClock = shotClockSeconds;
+    runShots++;
+    _capture = _ShotCapture(
+      t: ((_clock - _runStartClock) * 1000).round(),
+      stage: stage,
+      view: view,
+      target: target.visible ? target.position.clone() : null,
+      chord: Vector2.zero(),
+      dev: 0,
+      tMax: 0,
+      power: 0,
+      keeper: [for (final k in keepers) k.active ? k.elapsed : null],
+    )..path = ShotPath.timeout;
+    _timeoutPopup();
+    _miss(ball.position, 0);
+  }
+
+  void _timeoutPopup() => scene.add(
+    ScorePopup(
+      view.ballRest + Vector2(0, -190),
+      'SÜRE!',
+      color: const Color(0xFFFF5C5C),
+    ),
+  );
 
   /// Koşuyu dışarıdan bitirir (düello süresi doldu / rakip bitirdi):
   /// perde eklenmez, uçmakta olan top sayılmaz.

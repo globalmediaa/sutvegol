@@ -12,9 +12,17 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class DuelScreen extends StatefulWidget {
-  const DuelScreen({super.key, this.controller, this.renderGames = true});
+  const DuelScreen({
+    super.key,
+    this.controller,
+    this.renderGames = true,
+    this.initialDuelId,
+  });
   final DuelController? controller;
   final bool renderGames;
+
+  /// Rövanş: kuyruğa girmeden bu maça bağlanır.
+  final String? initialDuelId;
   @override
   State<DuelScreen> createState() => _DuelScreenState();
 }
@@ -22,9 +30,13 @@ class DuelScreen extends StatefulWidget {
 class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
   late final DuelController _c =
       widget.controller ??
-      DuelController(userId: AuthService.instance.user!.id, api: HttpDuelApi());
+      DuelController(
+        userId: AuthService.instance.user!.id,
+        api: HttpDuelApi(),
+        initialDuelId: widget.initialDuelId,
+      );
   SutVeGolGame? _mine, _replica;
-  bool _loaded = false, _started = false, _closing = false;
+  bool _loaded = false, _started = false, _closing = false, _rematched = false;
   Timer? _clock;
   final List<ShotRecord> _pending = [];
 
@@ -76,9 +88,20 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
       });
     }
     _updateGames();
-    if (_c.terminal) {
-      _clock?.cancel();
-      _clock = null;
+    final rematchId = s?.rematch?.duelId;
+    if (rematchId != null && !_rematched) {
+      _rematched = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => DuelScreen(
+              initialDuelId: rematchId,
+              renderGames: widget.renderGames,
+            ),
+          ),
+        );
+      });
     }
     setState(() {});
   }
@@ -245,7 +268,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                                 children: [
                                   Expanded(
                                     child: _field(
-                                      s.opponent(_c.userId),
+                                      _c.opponentView!,
                                       _replica,
                                       opponent: true,
                                     ),
@@ -285,14 +308,20 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                                             )
                                             ? Duration.zero
                                             : const Duration(milliseconds: 220),
-                                        child: Text(
-                                          '${_c.countdown}',
+                                        child: Column(
                                           key: ValueKey(_c.countdown),
-                                          style: FK.t(
-                                            size: 100,
-                                            w: FontWeight.w700,
-                                            color: FK.amber,
-                                          ),
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '${_c.countdown}',
+                                              style: FK.t(
+                                                size: 100,
+                                                w: FontWeight.w700,
+                                                color: FK.amber,
+                                              ),
+                                            ),
+                                            if (s.isGhost) _ghostChip(s),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -344,7 +373,8 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 12),
             Text(
-              '90 saniye. 3 can. En yüksek skor kazanır.',
+              '90 saniye ortak süre. Şut başına 5 saniye. '
+              'Iskalamak seriyi bozar; üst üste goller x2, x3 puan.',
               textAlign: TextAlign.center,
               style: FK.t(size: 17, color: FK.muted, height: 1.4),
             ),
@@ -360,8 +390,15 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 16),
               Text(
-                'Gerçek bir oyuncu aranıyor…',
+                'Canlı rakip aranıyor… ${_c.searchElapsedMs ~/ 1000} sn',
                 style: FK.t(size: 17, w: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '15 saniyede canlı rakip bulunamazsa gerçek bir oyuncunun '
+                'kayıtlı koşusuna karşı oynarsın.',
+                textAlign: TextAlign.center,
+                style: FK.t(size: 14, color: FK.muted, height: 1.4),
               ),
             ],
             if (_c.error != null)
@@ -398,65 +435,91 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _field(DuelPlayer p, SutVeGolGame? game, {required bool opponent}) =>
-      ClipRect(
-        child: Stack(
-          children: [
-            if (game != null)
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: IgnorePointer(
-                    ignoring: opponent || _c.phase != DuelPhase.live,
-                    child: GameWidget<SutVeGolGame>(
-                      key: ValueKey(game),
-                      game: game,
-                    ),
+  String _opponentLabel(DuelSnapshot s) => switch (s.opponentKind) {
+    OpponentKind.live => 'RAKİBİN',
+    OpponentKind.recorded => 'KAYITLI RAKİP',
+    OpponentKind.cpu => 'CPU KOŞUSU',
+  };
+
+  /// Ghost maçını insan gibi göstermez: kaynağı açıkça yazar.
+  Widget _ghostChip(DuelSnapshot s) => Container(
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: FK.navy.withValues(alpha: .9),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: FK.cyan.withValues(alpha: .5)),
+    ),
+    child: Text(
+      s.opponentKind == OpponentKind.cpu
+          ? 'CPU koşusu · bilgisayar'
+          : 'Kayıtlı rakip · ${s.opponent(_c.userId).name}',
+      textAlign: TextAlign.center,
+      style: FK.t(size: 13, w: FontWeight.w600, color: FK.cyan),
+    ),
+  );
+
+  Widget _badge(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: FK.navy.withValues(alpha: .9),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      text,
+      style: FK.t(size: 12, w: FontWeight.w700, color: color),
+    ),
+  );
+
+  Widget _field(DuelPlayer p, SutVeGolGame? game, {required bool opponent}) {
+    final s = _c.snapshot!;
+    final lost = opponent && !s.isGhost && !p.connected && !s.finished;
+    return ClipRect(
+      child: Stack(
+        children: [
+          if (game != null)
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: IgnorePointer(
+                  ignoring: opponent || _c.phase != DuelPhase.live,
+                  child: GameWidget<SutVeGolGame>(
+                    key: ValueKey(game),
+                    game: game,
                   ),
                 ),
               ),
-            Positioned(
-              left: 12,
-              top: 8,
-              right: 12,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: FK.navy.withValues(alpha: .88),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      opponent ? 'RAKİBİN' : 'SENİN SAHAN',
-                      style: FK.t(
-                        size: 12,
-                        w: FontWeight.w700,
-                        color: opponent ? FK.cyan : FK.amber,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (p.finished)
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      color: FK.navy,
-                      child: Text(
-                        'KOŞU BİTTİ',
-                        style: FK.t(size: 12, color: FK.muted),
-                      ),
-                    ),
-                ],
-              ),
             ),
-          ],
-        ),
-      );
+          Positioned(
+            left: 12,
+            top: 8,
+            right: 12,
+            child: Row(
+              children: [
+                _badge(
+                  opponent ? _opponentLabel(s) : 'SENİN SAHAN',
+                  opponent ? FK.cyan : FK.amber,
+                ),
+                const Spacer(),
+                if (lost)
+                  Flexible(
+                    child: _badge(
+                      'BAĞLANTI KOPTU · '
+                      '${max(0, ((kForfeitSilentMs - p.silentMs) / 1000).ceil())} sn',
+                      FK.red,
+                    ),
+                  )
+                else if (p.finished)
+                  _badge('KOŞU BİTTİ', FK.muted),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _versus(DuelSnapshot s) {
-    final me = s.player(_c.userId), them = s.opponent(_c.userId);
+  Widget _versus(DuelSnapshot s, {bool clock = true}) {
+    final me = s.player(_c.userId), them = _c.opponentView!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: const BoxDecoration(
@@ -491,20 +554,20 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
               Expanded(child: _playerScore(them, FK.cyan)),
             ],
           ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: _c.secondsLeft / kDuelSeconds,
-            minHeight: 3,
-            color: FK.orange,
-            backgroundColor: FK.glass,
-          ),
-          if (!_c.connected || !them.connected)
+          if (clock) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: _c.secondsLeft / kDuelSeconds,
+              minHeight: 3,
+              color: FK.orange,
+              backgroundColor: FK.glass,
+            ),
+          ],
+          if (clock && !_c.connected)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                !_c.connected
-                    ? 'Bağlantı yenileniyor. Şutların saklanıyor.'
-                    : 'Rakibin bağlantısı yenileniyor.',
+                'Bağlantı yenileniyor. Şutların saklanıyor.',
                 textAlign: TextAlign.center,
                 style: FK.t(size: 12, color: FK.amber),
               ),
@@ -517,7 +580,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
   Widget _playerScore(DuelPlayer p, Color color) => Column(
     children: [
       Text(
-        p.name,
+        p.ghost ? '${p.name} (kayıt)' : p.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: FK.t(size: 14, w: FontWeight.w600),
@@ -527,30 +590,78 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
         style: FK.t(size: 30, w: FontWeight.w700, color: color),
       ),
       Semantics(
-        label: '${p.lives} can',
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < 3; i++)
-                Icon(
-                  i < p.lives
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  size: 14,
-                  color: i < p.lives ? FK.red : FK.muted,
-                ),
-            ],
+        label: 'Combo ${p.combo}',
+        child: Text(
+          p.combo >= 2 ? 'COMBO x${min(3, p.combo)}' : 'COMBO —',
+          style: FK.t(
+            size: 12,
+            w: FontWeight.w700,
+            color: p.combo >= 2 ? FK.gold : FK.muted,
           ),
         ),
       ),
     ],
   );
 
+  String _resultLine(DuelSnapshot s, bool won) {
+    switch (s.reason) {
+      case 'disconnect':
+        return won
+            ? 'Rakibin bağlantısı 30 saniye kesik kaldı; hükmen kazandın.'
+            : 'Bağlantın 30 saniye kesik kaldı; maç hükmen bitti.';
+      case 'forfeit':
+        return won
+            ? 'Rakibin maçtan ayrıldı.'
+            : 'Maçtan ayrıldığın için sonuç hükmen yazıldı.';
+    }
+    if (s.draw) return 'Aynı skor, aynı isabet.';
+    return won
+        ? 'Bu sahanın yıldızı sensin.'
+        : 'Bir sonraki maç senin olabilir.';
+  }
+
+  Widget _statRow(String label, String mine, String theirs) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            mine,
+            textAlign: TextAlign.center,
+            style: FK.t(size: 18, w: FontWeight.w700, color: FK.amber),
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: FK.t(size: 13, color: FK.muted),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            theirs,
+            textAlign: TextAlign.center,
+            style: FK.t(size: 18, w: FontWeight.w700, color: FK.cyan),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _result(DuelSnapshot s) {
     final won = s.winnerId == _c.userId;
+    final me = s.player(_c.userId), them = s.opponent(_c.userId);
+    final r = s.rematch;
+    final rating =
+        s.ratingCounted && s.ratingBefore != null && s.ratingAfter != null
+        ? 'Puan ${s.ratingBefore} → ${s.ratingAfter} '
+              '(${s.ratingAfter! - s.ratingBefore! >= 0 ? '+' : ''}${s.ratingAfter! - s.ratingBefore!})'
+              '${me.calibrating ? ' · kalibrasyon' : ''}'
+        : (s.isGhost
+              ? 'Kayıtlı rakip maçları sıralamaya sayılmaz.'
+              : 'Bu maç sıralamaya sayılmadı.');
     return ColoredBox(
       color: FK.navy.withValues(alpha: .95),
       child: Center(
@@ -568,38 +679,100 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                             ? Icons.emoji_events_rounded
                             : Icons.sports_soccer_rounded),
                   color: won ? FK.gold : FK.cyan,
-                  size: 64,
+                  size: 56,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 Text(
                   s.draw ? 'BERABERE' : (won ? 'KAZANDIN!' : 'GÜZEL MAÇTI'),
                   textAlign: TextAlign.center,
                   style: FK.t(
-                    size: 36,
+                    size: 34,
                     w: FontWeight.w700,
                     color: won ? FK.amber : FK.text,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
-                  s.reason == 'forfeit'
-                      ? 'Düello oyuncunun ayrılmasıyla tamamlandı.'
-                      : (won
-                            ? 'Bu sahanın yıldızı sensin.'
-                            : s.draw
-                            ? 'Aynı heyecan, aynı skor.'
-                            : 'Bir sonraki maç senin olabilir.'),
+                  _resultLine(s, won),
                   textAlign: TextAlign.center,
-                  style: FK.t(size: 16, color: FK.muted, height: 1.4),
+                  style: FK.t(size: 15, color: FK.muted, height: 1.4),
                 ),
-                const SizedBox(height: 24),
-                _versus(s),
-                const SizedBox(height: 28),
+                const SizedBox(height: 4),
+                if (s.isGhost)
+                  _ghostChip(s)
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _badge('CANLI RAKİP · ${them.name}', FK.cyan),
+                  ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: FK.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: FK.glassBorder),
+                  ),
+                  child: Column(
+                    children: [
+                      _statRow('SKOR', '${me.score}', '${them.score}'),
+                      _statRow(
+                        'İSABET',
+                        '${me.hits}/${me.shots}',
+                        '${them.hits}/${them.shots}',
+                      ),
+                      _statRow(
+                        'EN UZUN COMBO',
+                        '${me.maxStreak}',
+                        '${them.maxStreak}',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _badge('+${s.xp ?? 0} XP', FK.gold),
+                    _badge(rating, s.ratingCounted ? FK.text : FK.muted),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (r != null && (_c.rematchOpen || r.duelId != null)) ...[
+                  if (r.theirs && !r.mine)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Rakibin rövanş istiyor!',
+                        style: FK.t(
+                          size: 15,
+                          w: FontWeight.w700,
+                          color: FK.amber,
+                        ),
+                      ),
+                    ),
+                  PillButton(
+                    label: r.duelId != null
+                        ? 'RÖVANŞ BAŞLIYOR…'
+                        : (r.mine
+                              ? 'RAKİP BEKLENİYOR (${_c.rematchSecondsLeft})'
+                              : 'RÖVANŞ (${_c.rematchSecondsLeft})'),
+                    icon: Icons.replay_rounded,
+                    onTap: _c.requestRematch,
+                    enabled: !r.mine && !_c.rematchBusy && r.duelId == null,
+                    height: 56,
+                    width: double.infinity,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 PillButton(
                   label: 'YENİ RAKİP',
                   icon: Icons.sports_soccer_rounded,
                   onTap: _again,
-                  height: 56,
+                  primary: r == null || !_c.rematchOpen,
+                  height: 52,
                   width: double.infinity,
                 ),
                 const SizedBox(height: 12),
@@ -608,7 +781,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                   icon: Icons.arrow_back_rounded,
                   primary: false,
                   onTap: () => Navigator.of(context).pop(),
-                  height: 52,
+                  height: 48,
                   width: double.infinity,
                   fontSize: 15,
                 ),
