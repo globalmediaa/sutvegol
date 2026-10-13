@@ -170,21 +170,21 @@ class _AuthScreenState extends State<AuthScreen>
                             const TextSpan(text: 'Devam ederek '),
                             TextSpan(
                               text: 'Kullanım Koşulları',
-                              style: FK.t(
-                                size: 12,
-                                color: FK.amber,
-                                height: 1.35,
-                              ).copyWith(decoration: TextDecoration.underline),
+                              style: FK
+                                  .t(size: 12, color: FK.amber, height: 1.35)
+                                  .copyWith(
+                                    decoration: TextDecoration.underline,
+                                  ),
                               recognizer: _termsLink,
                             ),
                             const TextSpan(text: ' ve '),
                             TextSpan(
                               text: 'Gizlilik Politikası',
-                              style: FK.t(
-                                size: 12,
-                                color: FK.amber,
-                                height: 1.35,
-                              ).copyWith(decoration: TextDecoration.underline),
+                              style: FK
+                                  .t(size: 12, color: FK.amber, height: 1.35)
+                                  .copyWith(
+                                    decoration: TextDecoration.underline,
+                                  ),
                               recognizer: _privacyLink,
                             ),
                             const TextSpan(

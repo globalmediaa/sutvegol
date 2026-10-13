@@ -196,12 +196,10 @@ void main() {
         'games': '3',
         'blocked': false,
       });
-      expect((e.username, e.score, e.games, e.blocked), (
-        'Oyuncu#B2B2',
-        120,
-        3,
-        false,
-      ));
+      expect(
+        (e.username, e.score, e.games, e.blocked),
+        ('Oyuncu#B2B2', 120, 3, false),
+      );
       final c = UsernameCheck.fromJson({
         'valid': true,
         'allowed': false,
@@ -306,8 +304,14 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(find.text('Bu kullanıcı adı kullanılabilir'), findsOneWidget);
         // Koşullar metni sıfır toleransı açıkça söyler; işaretlenmeden düğme kapalı.
-        expect(find.textContaining('sıfır tolerans', findRichText: true), findsOneWidget);
-        expect(find.textContaining('Kullanım Koşulları', findRichText: true), findsOneWidget);
+        expect(
+          find.textContaining('sıfır tolerans', findRichText: true),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Kullanım Koşulları', findRichText: true),
+          findsOneWidget,
+        );
         final submit = find.ancestor(
           of: find.text('SAHAYA ÇIK'),
           matching: find.byType(GestureDetector),
@@ -320,53 +324,55 @@ void main() {
       },
     );
 
-    testWidgets('e-posta kaydı: onay kutusu yalnız kayıtta, onaysız hesap açılmaz', (
-      tester,
-    ) async {
-      debugUsernameCheck = (v) async =>
-          const UsernameCheck(valid: true, allowed: true, available: true);
-      AuthService.instance.user = null;
-      await tester.pumpWidget(MaterialApp(home: AuthScreen(onGuest: () {})));
-      await tester.pump(const Duration(seconds: 2));
-      expect(find.byKey(const Key('terms-consent')), findsOneWidget);
-      await tester.enterText(find.byType(TextField).first, 'gol_kral');
-      await tester.pump(const Duration(milliseconds: 500));
-      final submit = find.ancestor(
-        of: find.text('HESABINI OLUŞTUR'),
-        matching: find.byType(GestureDetector),
-      );
-      expect(tester.widget<GestureDetector>(submit.first).onTap, isNull);
-      await tester.ensureVisible(find.byKey(const Key('terms-consent')));
-      await tester.tap(find.byKey(const Key('terms-consent')));
-      await tester.pump();
-      expect(tester.widget<GestureDetector>(submit.first).onTap, isNotNull);
-      // Giriş modunda kutu yok (mevcut hesap).
-      await tester.ensureVisible(find.text('Giriş yap'));
-      await tester.tap(find.text('Giriş yap'));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byKey(const Key('terms-consent')), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'e-posta kaydı: onay kutusu yalnız kayıtta, onaysız hesap açılmaz',
+      (tester) async {
+        debugUsernameCheck = (v) async =>
+            const UsernameCheck(valid: true, allowed: true, available: true);
+        AuthService.instance.user = null;
+        await tester.pumpWidget(MaterialApp(home: AuthScreen(onGuest: () {})));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.byKey(const Key('terms-consent')), findsOneWidget);
+        await tester.enterText(find.byType(TextField).first, 'gol_kral');
+        await tester.pump(const Duration(milliseconds: 500));
+        final submit = find.ancestor(
+          of: find.text('HESABINI OLUŞTUR'),
+          matching: find.byType(GestureDetector),
+        );
+        expect(tester.widget<GestureDetector>(submit.first).onTap, isNull);
+        await tester.ensureVisible(find.byKey(const Key('terms-consent')));
+        await tester.tap(find.byKey(const Key('terms-consent')));
+        await tester.pump();
+        expect(tester.widget<GestureDetector>(submit.first).onTap, isNotNull);
+        // Giriş modunda kutu yok (mevcut hesap).
+        await tester.ensureVisible(find.text('Giriş yap'));
+        await tester.tap(find.text('Giriş yap'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byKey(const Key('terms-consent')), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('uygunsuz ad sunucu tarafından reddedilince mesaj alanda kalır', (
-      tester,
-    ) async {
-      debugUsernameCheck = (v) async =>
-          const UsernameCheck(valid: true, allowed: true, available: true);
-      expect(
-        usernameFeedback(
-          const UsernameCheck(valid: true, allowed: false, available: false),
-        ).text,
-        kUsernameNotAllowed,
-      );
-      expect(
-        usernameFeedback(
-          const UsernameCheck(valid: true, allowed: true, available: false),
-        ).text,
-        'Bu kullanıcı adı alınmış. Başka bir tane dene.',
-      );
-      expect(usernameFeedback(null).ok, isNull);
-    });
+    testWidgets(
+      'uygunsuz ad sunucu tarafından reddedilince mesaj alanda kalır',
+      (tester) async {
+        debugUsernameCheck = (v) async =>
+            const UsernameCheck(valid: true, allowed: true, available: true);
+        expect(
+          usernameFeedback(
+            const UsernameCheck(valid: true, allowed: false, available: false),
+          ).text,
+          kUsernameNotAllowed,
+        );
+        expect(
+          usernameFeedback(
+            const UsernameCheck(valid: true, allowed: true, available: false),
+          ).text,
+          'Bu kullanıcı adı alınmış. Başka bir tane dene.',
+        );
+        expect(usernameFeedback(null).ok, isNull);
+      },
+    );
   });
 
   group('sıralama', () {
@@ -411,9 +417,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Oyuncuyu şikâyet et'), findsOneWidget);
       final send = find.byKey(const Key('report-send'));
-      expect(tester.widget<GestureDetector>(
-        find.descendant(of: send, matching: find.byType(GestureDetector)).first,
-      ).onTap, isNull); // sebep seçilmeden gönderilemez
+      expect(
+        tester
+            .widget<GestureDetector>(
+              find
+                  .descendant(of: send, matching: find.byType(GestureDetector))
+                  .first,
+            )
+            .onTap,
+        isNull,
+      ); // sebep seçilmeden gönderilemez
       await tester.tap(find.byKey(const Key('reason-username')));
       await tester.enterText(find.byKey(const Key('report-note')), 'Kaba ad');
       await tester.pump();
@@ -456,7 +469,9 @@ void main() {
       expect(find.byKey(const Key('player-unblock')), findsOneWidget);
     });
 
-    testWidgets('misafir: şikâyet için giriş ya da e-posta yolu', (tester) async {
+    testWidgets('misafir: şikâyet için giriş ya da e-posta yolu', (
+      tester,
+    ) async {
       AuthService.instance.user = null;
       await pumpBoard(tester);
       // Misafirde "kendi satırı" yoktur: iki satırda da ⋯ var.
@@ -534,7 +549,9 @@ void main() {
     });
 
     for (final size in [const Size(320, 568), const Size(440, 956)]) {
-      testWidgets('sonuç ekranında rakip ⋯ var ve $size taşmaz', (tester) async {
+      testWidgets('sonuç ekranında rakip ⋯ var ve $size taşmaz', (
+        tester,
+      ) async {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
@@ -560,7 +577,10 @@ void main() {
       await tester.tap(find.byKey(const Key('account-blocked')));
       await tester.pumpAndSettle();
       expect(find.text('@rakip_oyuncu'), findsOneWidget);
-      expect(find.text('Oyuncu#C3C3'), findsOneWidget); // gizli ad yeniden açılmaz
+      expect(
+        find.text('Oyuncu#C3C3'),
+        findsOneWidget,
+      ); // gizli ad yeniden açılmaz
       await tester.tap(find.byKey(const Key('unblock-$kOther')));
       await tester.pumpAndSettle();
       expect(fake.unblocked, [kOther]);

@@ -245,44 +245,46 @@ Future<bool> _run(
 }
 
 /// Misafir: şikâyet ve engel hesap ister; e-posta ile bildirim yolu açık kalır.
-Future<void> _guestSheet(BuildContext context, PlayerRef player) =>
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: FK.navy2,
-      showDragHandle: true,
-      builder: (c) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Giriş yapman gerekiyor',
-                style: FK.t(size: 20, w: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Oyuncuları uygulamadan şikâyet etmek ve engellemek için hesabınla '
-                'giriş yap. Uygunsuz bir ad gördüysen bize e-postayla da bildirebilirsin.',
-                style: FK.t(size: 15, color: FK.muted, height: 1.4),
-              ),
-              const SizedBox(height: 18),
-              PillButton(
-                label: 'E-POSTA İLE BİLDİR',
-                icon: Icons.mail_outline_rounded,
-                height: 50,
-                fontSize: 15,
-                onTap: () {
-                  Navigator.pop(c);
-                  launchUrl(reportMailUri(player));
-                },
-              ),
-            ],
+Future<void> _guestSheet(
+  BuildContext context,
+  PlayerRef player,
+) => showModalBottomSheet<void>(
+  context: context,
+  backgroundColor: FK.navy2,
+  showDragHandle: true,
+  builder: (c) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Giriş yapman gerekiyor',
+            style: FK.t(size: 20, w: FontWeight.w700),
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            'Oyuncuları uygulamadan şikâyet etmek ve engellemek için hesabınla '
+            'giriş yap. Uygunsuz bir ad gördüysen bize e-postayla da bildirebilirsin.',
+            style: FK.t(size: 15, color: FK.muted, height: 1.4),
+          ),
+          const SizedBox(height: 18),
+          PillButton(
+            label: 'E-POSTA İLE BİLDİR',
+            icon: Icons.mail_outline_rounded,
+            height: 50,
+            fontSize: 15,
+            onTap: () {
+              Navigator.pop(c);
+              launchUrl(reportMailUri(player));
+            },
+          ),
+        ],
       ),
-    );
+    ),
+  ),
+);
 
 /// Misafir için hazır e-posta taslağı (oyuncu adı ve kalıcı kimliği).
 Uri reportMailUri(PlayerRef player) => Uri(
@@ -536,12 +538,14 @@ class _TermsConsentState extends State<TermsConsent> {
                   children: [
                     TextSpan(
                       text: 'Kullanım Koşulları',
-                      style: FK.t(
-                        size: 13,
-                        color: FK.amber,
-                        w: FontWeight.w700,
-                        height: 1.35,
-                      ).copyWith(decoration: TextDecoration.underline),
+                      style: FK
+                          .t(
+                            size: 13,
+                            color: FK.amber,
+                            w: FontWeight.w700,
+                            height: 1.35,
+                          )
+                          .copyWith(decoration: TextDecoration.underline),
                       recognizer: _link,
                     ),
                     const TextSpan(
