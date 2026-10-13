@@ -2,4 +2,4 @@
 // "iOS URL scheme" değeri, örn. com.googleusercontent.apps.1234567890-abc.
 // Aynı istemcinin kimliği derlemede --dart-define=GOOGLE_IOS_CLIENT_ID ile verilir.
 // Değer girilene kadar uygulamanın kendi şeması kullanılır (zararsız).
-GOOGLE_REVERSED_CLIENT_ID=sutvegol
+GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.846087551741-ruqfq3brpl240230chjivp08e04b7ubd
