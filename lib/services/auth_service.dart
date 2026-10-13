@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'api_client.dart';
+import 'progress_service.dart';
 
 /// Google OAuth istemci kimlikleri derleme anında verilir:
 /// `--dart-define=GOOGLE_IOS_CLIENT_ID=…apps.googleusercontent.com`
@@ -13,6 +14,29 @@ import 'api_client.dart';
 /// istemcisi; Android'de idToken almak için gerekir).
 const googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+
+/// Testler için: Google düğmesinin görünürlüğünü zorlar (null = derleme yapılandırması).
+@visibleForTesting
+bool? debugGoogleAvailable;
+
+/// Google girişi bu derlemede çalışır mı? iOS/macOS'ta iOS istemci kimliği, Android'de
+/// idToken için Web (server) istemci kimliği şarttır. Yoksa düğme hiç gösterilmez
+/// (çalışmayan düğme mağaza incelemesinde ret sebebidir).
+bool get googleAvailable {
+  final forced = debugGoogleAvailable;
+  if (forced != null) return forced;
+  if (kIsWeb) return false;
+  if (Platform.isIOS || Platform.isMacOS) return googleIosClientId.isNotEmpty;
+  if (Platform.isAndroid) return googleServerClientId.isNotEmpty;
+  return false;
+}
+
+/// Sign in with Apple yalnız Apple platformlarında sunulur.
+bool get appleSignInAvailable =>
+    !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+
+/// Bulut kaydının girişte en fazla bu kadar beklenir; sonra arka planda sürer.
+const progressAttachTimeout = Duration(seconds: 4);
 
 class AppUser {
   const AppUser({
@@ -57,8 +81,19 @@ class AuthService extends ChangeNotifier {
     } catch (_) {
       user = null;
     }
+    await _attachProgress();
     loading = false;
     notifyListeners();
+  }
+
+  /// İlerleme hesabına bağlanır: bulut çekilip sessizce birleştirilir (yeni kurulumda
+  /// soru sormadan geri yüklenir). Ağ yavaşsa giriş beklemez, senkron arka planda sürer.
+  Future<void> _attachProgress() async {
+    try {
+      await ProgressService.instance
+          .attach(user?.id)
+          .timeout(progressAttachTimeout);
+    } catch (_) {}
   }
 
   Future<void> emailAuth(
@@ -161,6 +196,12 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    try {
+      await ProgressService.instance.flush().timeout(
+        const Duration(seconds: 3),
+      );
+    } catch (_) {}
+    await ProgressService.instance.attach(null);
     await api.clear();
     user = null;
     notifyListeners();
@@ -179,6 +220,8 @@ class AuthService extends ChangeNotifier {
         };
       }
       await api.delete('/v1/me', data: data);
+      // Sunucu bulut ilerlemesini de sildi; bu cihazdaki kopya da temizlenir.
+      await ProgressService.instance.forgetAccount();
       await api.clear();
       user = null;
     });
@@ -187,6 +230,7 @@ class AuthService extends ChangeNotifier {
   Future<void> _accept(Map<String, dynamic> result) async {
     await api.saveTokens(result);
     user = AppUser.fromJson(result['user'] as Map<String, dynamic>);
+    await _attachProgress();
   }
 
   Future<void> _run(Future<void> Function() action) async {

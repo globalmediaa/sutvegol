@@ -51,7 +51,8 @@ class AccountScreen extends StatelessWidget {
                   ),
                   title: const Text('Bulut senkronizasyonu'),
                   subtitle: const Text(
-                    'Skorların hesabına güvenli şekilde bağlıdır.',
+                    'Rekorun, istatistiklerin ve ayarların hesabına anlık kaydedilir. '
+                    'Uygulamayı silip yeniden yüklersen giriş yapınca kaldığın yerden devam edersin.',
                   ),
                 ),
               ],
@@ -98,7 +99,9 @@ class AccountScreen extends StatelessWidget {
       builder: (c) => AlertDialog(
         title: const Text('Hesap silinsin mi?'),
         content: const Text(
-          'Kullanıcı adın, giriş bağlantıların ve kişisel istatistiklerin kalıcı olarak silinir. Bu işlem geri alınamaz.',
+          'Kullanıcı adın, giriş bağlantıların, kişisel istatistiklerin ve bulut kaydın '
+          '(rekor, oyun istatistikleri, ayarlar, düello puanı ve XP) kalıcı olarak silinir; '
+          'bu cihazdaki ilerleme de temizlenir. Bu işlem geri alınamaz.',
         ),
         actions: [
           TextButton(

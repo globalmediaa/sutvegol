@@ -30,7 +30,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 
 ## Geliştirme bayrakları
 - `--dart-define=API_BASE_URL=https://api.alan.tld` → canlı sunucu (varsayılan example.com = yapılandırılmamış).
-- `--dart-define=GOOGLE_IOS_CLIENT_ID=…apps.googleusercontent.com` → iOS Google girişi (boşsa buton "yapılandırılmamış" hatası verir, çökmez). `--dart-define=GOOGLE_SERVER_CLIENT_ID=…` → Web istemcisi; Android'de idToken için şart. iOS geri dönüş şeması `ios/Flutter/Social.xcconfig` içindeki `GOOGLE_REVERSED_CLIENT_ID` (com.googleusercontent.apps.…). Sign in with Apple entitlement'ı `Runner.entitlements` içinde.
+- `--dart-define=GOOGLE_IOS_CLIENT_ID=…apps.googleusercontent.com` → iOS Google girişi. Kimlik yoksa (iOS'ta IOS_CLIENT_ID, Android'de SERVER_CLIENT_ID) "Google ile devam et/kaydet" düğmeleri **hiç gösterilmez** (`googleAvailable`, `auth_service.dart`; çalışmayan düğme 2.1 ret riski). `--dart-define=GOOGLE_SERVER_CLIENT_ID=…` → Web istemcisi; Android'de idToken için şart. iOS geri dönüş şeması `ios/Flutter/Social.xcconfig` içindeki `GOOGLE_REVERSED_CLIENT_ID` (com.googleusercontent.apps.…). Sign in with Apple entitlement'ı `Runner.entitlements` içinde.
 - `--dart-define=AUTOPLAY=true` → oyun kendi kendine oynar.
 - `--dart-define=UI_PREVIEW=leaderboard|profile` → ekranı doğrudan açar.
 - `--dart-define=FEVER_TEST=true` → ilk toptan itibaren Kral Modu.

@@ -59,12 +59,11 @@ void main() {
       addTearDown(tester.view.reset);
       // Gerçek akışta initialize() bitince loading=false olur.
       AuthService.instance.loading = false;
-      await tester.pumpWidget(
-        MaterialApp(home: AuthScreen(onGuest: () {})),
-      );
+      await tester.pumpWidget(MaterialApp(home: AuthScreen(onGuest: () {})));
       await tester.pump(const Duration(seconds: 2));
       expect(find.text('Apple ile devam et'), findsOneWidget);
-      expect(find.text('Google ile devam et'), findsOneWidget);
+      // Google istemci kimliği bu derlemede yok: düğme hiç gösterilmez.
+      expect(find.text('Google ile devam et'), findsNothing);
       expect(find.text('Hesap oluştur'), findsOneWidget);
       expect(find.text('MİSAFİR OLARAK OYNA'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -78,4 +77,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('Google kimliği verilince Google düğmesi görünür', (
+    tester,
+  ) async {
+    debugGoogleAvailable = true;
+    addTearDown(() => debugGoogleAvailable = null);
+    AuthService.instance.loading = false;
+    await tester.pumpWidget(MaterialApp(home: AuthScreen(onGuest: () {})));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Google ile devam et'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

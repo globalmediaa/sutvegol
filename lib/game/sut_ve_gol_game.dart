@@ -8,6 +8,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/progress_service.dart';
 import 'fever.dart';
 import 'geometry.dart';
 import 'hud.dart';
@@ -207,9 +208,27 @@ class SutVeGolGame extends FlameGame {
     return true;
   }
 
+  bool _listeningProgress = false;
+
+  /// Bulut birleştirmesi / başka cihazda sıfırlama: rekor ve ayarlar güncellenir.
+  void _onProgressChanged() {
+    if (_disposed) return;
+    final progress = ProgressService.instance;
+    best = progress.best;
+    if (soundOn != progress.sound) {
+      soundOn = progress.sound;
+      Sfx.setEnabled(soundOn, stage);
+    }
+    hapticsOn = progress.haptics;
+  }
+
   @override
   void onDispose() {
     _disposed = true;
+    if (_listeningProgress) {
+      ProgressService.instance.removeListener(_onProgressChanged);
+      _listeningProgress = false;
+    }
     pauseEngine();
     _queue.clear();
     _inbox.clear();
@@ -250,9 +269,17 @@ class SutVeGolGame extends FlameGame {
     if (_disposed) return;
 
     _prefs = await SharedPreferences.getInstance();
-    best = isReplica ? 0 : _prefs?.getInt('best') ?? 0;
-    soundOn = _prefs?.getBool('sound') ?? true;
-    hapticsOn = !isReplica && (_prefs?.getBool('haptics') ?? true);
+    // Rekor ve ayarlar bulut kaydıyla senkron ilerlemeden (ProgressService).
+    final progress = ProgressService.instance;
+    await progress.ensureLoaded();
+    if (_disposed) return;
+    best = isReplica ? 0 : progress.best;
+    soundOn = progress.sound;
+    hapticsOn = !isReplica && progress.haptics;
+    if (mode == GameMode.solo) {
+      progress.addListener(_onProgressChanged);
+      _listeningProgress = true;
+    }
     final prefs = _prefs;
     _tutorialPending =
         firstRunTutorial &&
@@ -592,13 +619,13 @@ class SutVeGolGame extends FlameGame {
     soundOn = v;
     if (isReplica) return;
     Sfx.setEnabled(v, stage);
-    _prefs?.setBool('sound', v);
+    ProgressService.instance.setSound(v);
   }
 
   void setHaptics(bool v) {
     if (isReplica) return;
     hapticsOn = v;
-    _prefs?.setBool('haptics', v);
+    ProgressService.instance.setHaptics(v);
   }
 
   // ---------------------------------------------------------------- sonuç
@@ -791,7 +818,7 @@ class SutVeGolGame extends FlameGame {
     if (f != null) _syncFromRecord(f);
     if (mode == GameMode.solo && score > best) {
       best = score;
-      _prefs?.setInt('best', best);
+      ProgressService.instance.recordBest(best);
     }
     scoreboard.flashScore();
     scene.add(
@@ -1103,9 +1130,19 @@ class SutVeGolGame extends FlameGame {
     _tutorialPending = false;
     final prefs = _prefs;
     if (prefs != null) TutorialProgress.markDone(prefs);
+    ProgressService.instance.setTutorialDone();
   }
 
   void closeTutorial() => overlays.remove(kTutorialOverlay);
+
+  /// "Sil ve baştan başla" sonrası: yarım koşu istatistiğe/sıralamaya yazılmadan
+  /// atılır, rekor sıfırdan başlar.
+  void restartAfterReset() {
+    if (isDuel) return;
+    runShots = 0;
+    best = ProgressService.instance.best;
+    restart();
+  }
 
   void restart() {
     if (isDuel) return;

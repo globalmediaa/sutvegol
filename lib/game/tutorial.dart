@@ -1,7 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// İlk açılış rehberinin kalıcı durumu. Oyunun mevcut tercih kaydını
-/// (SharedPreferences) kullanır; ayrı dosya ya da sunucu kaydı yoktur.
+/// İlk açılış rehberinin kalıcı durumu. Bayrak yerelde SharedPreferences'ta
+/// tutulur; girişli oyuncuda bulut ilerlemesinin (`ProgressService`,
+/// `tutorialDone`) parçası olarak senkronlanır, böylece yeniden yüklemede giriş
+/// yapınca rehber tekrar çıkmaz.
 class TutorialProgress {
   TutorialProgress._();
 

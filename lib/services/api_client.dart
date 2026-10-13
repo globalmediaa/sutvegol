@@ -11,10 +11,13 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 class ApiException implements Exception {
-  const ApiException(this.code, this.message, [this.status = 0]);
+  const ApiException(this.code, this.message, [this.status = 0, this.details]);
   final String code;
   final String message;
   final int status;
+
+  /// Hata gövdesindeki `error` nesnesi (ör. 409 progress_reset → güncel ilerleme).
+  final Map<String, dynamic>? details;
   @override
   String toString() => message;
 }
@@ -42,6 +45,9 @@ class ApiClient {
       await _storage.write(key: 'refresh_token', value: _refreshToken);
     }
   }
+
+  /// Saklı oturum var mı (erişim ya da yenileme anahtarı).
+  bool get hasSession => _accessToken != null || _refreshToken != null;
 
   Future<void> clear() async {
     _accessToken = null;
@@ -96,11 +102,7 @@ class ApiClient {
           headers: headers,
           body: jsonEncode(data ?? {}),
         ),
-        'PUT' => http.put(
-          uri,
-          headers: headers,
-          body: jsonEncode(data ?? {}),
-        ),
+        'PUT' => http.put(uri, headers: headers, body: jsonEncode(data ?? {})),
         'DELETE' => http.delete(
           uri,
           headers: headers,
@@ -114,11 +116,16 @@ class ApiClient {
         'Sunucuya ulaşılamadı. Bağlantını kontrol et.',
       );
     }
-    late Map<String,dynamic> decoded;
+    late Map<String, dynamic> decoded;
     try {
-      decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body) as Map<String,dynamic>;
+      decoded =
+          jsonDecode(response.body.isEmpty ? '{}' : response.body)
+              as Map<String, dynamic>;
     } catch (_) {
-      throw const ApiException('server','Sunucu yanıtı alınamadı. Yeniden dene.');
+      throw const ApiException(
+        'server',
+        'Sunucu yanıtı alınamadı. Yeniden dene.',
+      );
     }
     if (response.statusCode == 401 &&
         auth &&
@@ -135,6 +142,7 @@ class ApiClient {
         error?['code'] as String? ?? 'server',
         error?['message'] as String? ?? 'İşlem tamamlanamadı.',
         response.statusCode,
+        error,
       );
     }
     return decoded;
@@ -142,9 +150,16 @@ class ApiClient {
 
   Future<void> _refreshSession() async {
     try {
-      final refreshed=await _send('POST','/v1/auth/refresh',
-          data:{'refreshToken':_refreshToken},auth:false,retried:true);
+      final refreshed = await _send(
+        'POST',
+        '/v1/auth/refresh',
+        data: {'refreshToken': _refreshToken},
+        auth: false,
+        retried: true,
+      );
       await saveTokens(refreshed);
-    } finally { _refreshing=null; }
+    } finally {
+      _refreshing = null;
+    }
   }
 }

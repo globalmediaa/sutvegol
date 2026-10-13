@@ -7,6 +7,7 @@ import 'game/sut_ve_gol_game.dart';
 import 'game/sfx.dart';
 import 'services/auth_service.dart';
 import 'services/game_service.dart';
+import 'services/progress_service.dart';
 import 'ui/auth_screen.dart';
 import 'ui/game_over_overlay.dart';
 import 'ui/leaderboard_screen.dart';
@@ -28,6 +29,10 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   await loadBrandIdentity();
+  // Bulut kaydı: yerel ilerleme önce yüklenir, oturum varsa initialize() buluttan
+  // sessizce birleştirir; arka plana geçişte bekleyen değişiklik hemen gönderilir.
+  await ProgressService.instance.ensureLoaded();
+  ProgressService.instance.bindLifecycle();
   await AuthService.instance.initialize();
   runApp(const SutVeGolApp());
 }
@@ -100,6 +105,22 @@ class _GameScreenState extends State<GameScreen> {
   final _online = GameSessionService();
   late SutVeGolGame _game = _create();
 
+  /// Koşu bulut ilerlemesine (toplam istatistik) bir kez yazılır.
+  bool _runRecorded = false;
+
+  void _recordRun(GameRunSummary run) {
+    if (_runRecorded || run.shots <= 0) return;
+    _runRecorded = true;
+    ProgressService.instance.recordRun(
+      score: run.score,
+      shots: run.shots,
+      hits: run.hits,
+      feverHits: run.feverHits,
+      maxStreak: run.maxStreak,
+      durationMs: run.durationMs,
+    );
+  }
+
   Future<void> _openDuel() async {
     if (AuthService.instance.user == null) {
       widget.onSignIn?.call();
@@ -157,24 +178,31 @@ class _GameScreenState extends State<GameScreen> {
     // hazır olunca açılır (bayrak/eski ilerleme kontrolü oyunda).
     final g = SutVeGolGame()..firstRunTutorial = kUiPreview.isEmpty;
     g.onExit = _exit;
-    g.onRunStarted = () => unawaited(_online.start());
-    g.onRunFinished = (run) => unawaited(
-      _online.finish(
-        score: run.score,
-        shots: run.shots,
-        hits: run.hits,
-        misses: run.misses,
-        feverHits: run.feverHits,
-        maxStreak: run.maxStreak,
-        durationMs: run.durationMs,
-        stage: run.stage,
-      ),
-    );
+    g.onRunStarted = () {
+      _runRecorded = false;
+      unawaited(_online.start());
+    };
+    g.onRunFinished = (run) {
+      _recordRun(run);
+      unawaited(
+        _online.finish(
+          score: run.score,
+          shots: run.shots,
+          hits: run.hits,
+          misses: run.misses,
+          feverHits: run.feverHits,
+          maxStreak: run.maxStreak,
+          durationMs: run.durationMs,
+          stage: run.stage,
+        ),
+      );
+    };
     return g;
   }
 
   Future<void> _exit() async {
     final run = _game.runSummary;
+    _recordRun(run);
     unawaited(
       _online.finish(
         score: run.score,
@@ -207,8 +235,12 @@ class _GameScreenState extends State<GameScreen> {
       key: ValueKey(_game),
       game: _game,
       overlayBuilderMap: {
-        kGameOverOverlay: (context, game) =>
-            GameOverOverlay(game: game, onDuel: _openDuel),
+        kGameOverOverlay: (context, game) => GameOverOverlay(
+          game: game,
+          onDuel: _openDuel,
+          guest: widget.guest,
+          onSignIn: widget.onSignIn,
+        ),
         kPauseOverlay: (context, game) =>
             PauseOverlay(game: game, guest: widget.guest, onDuel: _openDuel),
         kTutorialOverlay: (context, game) =>

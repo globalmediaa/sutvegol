@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
+import '../services/auth_service.dart';
+import '../services/progress_service.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
 import 'theme.dart';
@@ -12,9 +14,19 @@ import 'widgets.dart';
 /// Oyun sonu perdesi: bulanık karartma, üstte çıkış, cam kart (sayaçla artan
 /// skor, rekor, sahne), sıra paneli ve "TEKRAR OYNA" hap butonu.
 class GameOverOverlay extends StatefulWidget {
-  const GameOverOverlay({super.key, required this.game, this.onDuel});
+  const GameOverOverlay({
+    super.key,
+    required this.game,
+    this.onDuel,
+    this.guest = false,
+    this.onSignIn,
+  });
   final SutVeGolGame game;
   final VoidCallback? onDuel;
+
+  /// Misafir: ilk oyundan sonra bir kez atlanabilir "Apple/Google ile kaydet" önerisi.
+  final bool guest;
+  final VoidCallback? onSignIn;
 
   @override
   State<GameOverOverlay> createState() => _GameOverOverlayState();
@@ -42,6 +54,11 @@ class _GameOverOverlayState extends State<GameOverOverlay>
     Future.delayed(const Duration(milliseconds: 1700), () {
       if (mounted) setState(() => _rankReady = true);
     });
+    if (widget.guest && !ProgressService.instance.saveOfferSeen) {
+      Future.delayed(const Duration(milliseconds: 1900), () {
+        if (mounted) showSaveProgressOffer(context, onSignIn: widget.onSignIn);
+      });
+    }
   }
 
   @override
@@ -293,4 +310,112 @@ class _GameOverOverlayState extends State<GameOverOverlay>
       ),
     ),
   );
+}
+
+/// Misafire bir kez gösterilen, atlanabilir kayıt önerisi. Yalnız bu derlemede
+/// çalışan sağlayıcılar listelenir (Google kimliği yoksa Google düğmesi yok);
+/// hiçbiri yoksa giriş ekranına götürür.
+Future<void> showSaveProgressOffer(
+  BuildContext context, {
+  VoidCallback? onSignIn,
+}) async {
+  await ProgressService.instance.markSaveOfferSeen();
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final auth = AuthService.instance;
+  Future<void> Function()? chosen;
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheet) {
+      void pick(Future<void> Function() action) {
+        chosen = action;
+        Navigator.of(sheet).pop();
+      }
+
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: GlassCard(
+            radius: 24,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(
+                  Icons.cloud_upload_rounded,
+                  color: FK.amber,
+                  size: 34,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'İlerlemeni kaydet',
+                  textAlign: TextAlign.center,
+                  style: FK.t(size: 22, w: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Misafir ilerlemen yalnız bu cihazda. Kaydedersen uygulamayı '
+                  'silip yeniden yüklesen de giriş yapınca kaldığın yerden devam edersin.',
+                  textAlign: TextAlign.center,
+                  style: FK.t(size: 14, color: FK.muted, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                if (appleSignInAvailable) ...[
+                  SocialButton(
+                    label: 'Apple ile kaydet',
+                    icon: const Icon(
+                      Icons.apple,
+                      color: Colors.black,
+                      size: 26,
+                    ),
+                    onTap: () => pick(auth.apple),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (googleAvailable) ...[
+                  SocialButton(
+                    label: 'Google ile kaydet',
+                    icon: const GoogleMark(size: 22),
+                    onTap: () => pick(auth.google),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (!appleSignInAvailable &&
+                    !googleAvailable &&
+                    onSignIn != null)
+                  PillButton(
+                    label: 'HESAPLA KAYDET',
+                    icon: Icons.person_add_alt_1_rounded,
+                    onTap: () {
+                      Navigator.of(sheet).pop();
+                      onSignIn();
+                    },
+                    height: 52,
+                    fontSize: 16,
+                    width: double.infinity,
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(sheet).pop(),
+                  child: const Text('Şimdi değil'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+  final action = chosen;
+  if (action == null) return;
+  try {
+    await action();
+  } catch (_) {
+    final message = auth.error;
+    if (message != null) {
+      messenger?.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 }

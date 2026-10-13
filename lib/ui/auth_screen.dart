@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
@@ -29,7 +27,7 @@ class _AuthScreenState extends State<AuthScreen>
   bool hidden = true;
   late final AnimationController _enter;
 
-  bool get appleAvailable => !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+  bool get appleAvailable => appleSignInAvailable;
 
   @override
   void initState() {
@@ -119,12 +117,16 @@ class _AuthScreenState extends State<AuthScreen>
               child: FadeTransition(
                 opacity: _enter,
                 child: SlideTransition(
-                  position: Tween(
-                    begin: const Offset(0, 0.05),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic),
-                  ),
+                  position:
+                      Tween(
+                        begin: const Offset(0, 0.05),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: _enter,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -184,12 +186,14 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         const SizedBox(height: 8),
       ],
-      SocialButton(
-        label: 'Google ile devam et',
-        icon: const GoogleMark(size: 22),
-        enabled: !busy,
-        onTap: () => run(auth.google),
-      ),
+      // Google kimliği bu derlemede yoksa düğme hiç gösterilmez.
+      if (googleAvailable)
+        SocialButton(
+          label: 'Google ile devam et',
+          icon: const GoogleMark(size: 22),
+          enabled: !busy,
+          onTap: () => run(auth.google),
+        ),
       const SizedBox(height: 14),
       _divider('veya e-posta ile'),
       const SizedBox(height: 12),
@@ -226,7 +230,9 @@ class _AuthScreenState extends State<AuthScreen>
             onPressed: () => setState(() => hidden = !hidden),
             color: FK.muted,
             icon: Icon(
-              hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              hidden
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
             ),
           ),
         ),
@@ -239,7 +245,11 @@ class _AuthScreenState extends State<AuthScreen>
             children: [
               const Padding(
                 padding: EdgeInsets.only(top: 1),
-                child: Icon(Icons.error_outline_rounded, color: FK.red, size: 18),
+                child: Icon(
+                  Icons.error_outline_rounded,
+                  color: FK.red,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -320,10 +330,7 @@ class _AuthScreenState extends State<AuthScreen>
       Expanded(child: Container(height: 1, color: FK.glassBorder)),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(
-          text,
-          style: FK.t(size: 12, color: FK.muted, spacing: 0.5),
-        ),
+        child: Text(text, style: FK.t(size: 12, color: FK.muted, spacing: 0.5)),
       ),
       Expanded(child: Container(height: 1, color: FK.glassBorder)),
     ],

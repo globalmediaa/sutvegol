@@ -24,6 +24,19 @@ if (str_starts_with($path, '/v1/duels/')) {
     }
 }
 
+if ($path === '/v1/progress' || $path === '/v1/progress/reset') {
+    header('Cache-Control: no-store');
+    require dirname(__DIR__) . '/src/progress.php';
+    $user = current_user();
+    try { output(progress_route($method, $path, $user)); }
+    catch (ProgressError $e) { output(['ok' => false, 'error' => ['code' => $e->kind, 'message' => $e->getMessage()] + $e->extra], $e->status); }
+    catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
+        error_log('Progress request failed: '.get_class($e));
+        fail('server', 'Bulut kaydına ulaşılamadı. Yeniden dene.', 503);
+    }
+}
+
 if ($path === '/health') {
     try { db()->query('SELECT 1'); output(['ok'=>true,'service'=>'sut-ve-gol','duelVersion'=>2,'time'=>gmdate('c')]); }
     catch (Throwable $e) { fail('unhealthy','Servis hazırlanıyor.',503); }
@@ -134,6 +147,9 @@ if ($method === 'DELETE' && $path === '/v1/me') {
     db()->prepare('DELETE FROM identities WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM refresh_tokens WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('DELETE FROM daily_user_stats WHERE user_id=?')->execute([$user['id']]);
+    // Bulut ilerlemesi (rekor, istatistik, ayarlar) ve düello puanı/XP de hesapla birlikte silinir.
+    db()->prepare('DELETE FROM player_progress WHERE user_id=?')->execute([$user['id']]);
+    db()->prepare('DELETE FROM duel_ratings WHERE user_id=?')->execute([$user['id']]);
     db()->prepare('UPDATE users SET email=NULL,password_hash=NULL,username=NULL,username_key=NULL,display_name=NULL,avatar_url=NULL,public_id=?,status="deleted" WHERE id=?')->execute([public_id(),$user['id']]);
     db()->commit(); output(['ok'=>true]);
 }
