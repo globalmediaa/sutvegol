@@ -39,6 +39,19 @@ $blocked = [
         // nefret / terör
         'nigga', 'n1gger', 'nigger', 'faggot', 'fag', 'hitler', 'h1tl3r', 'adolf_hitler', 'nazi', 'kkk', 'isis', 'pkk',
         'feto', 'siegheil', 'chink', 'neonazi',
+        // bağımsız inceleme (13 Ekim): son ünsüzü uzatma ("amkk" → "amk"), ünlüsüz kısaltma, Türkçe kök + ek,
+        // cinsel/nefret kaçışları. Her satır bir kuralın örneğidir; genelleme için aşağıdaki kural testlerine bak.
+        'aqq', 'aqqq', 'amkk', 'amkkkk', 'amqq', 's1kk', 'a_m_k_k', 'sikk', 'sikkk', 'bokk', 'pustt', 'fukk', 'dickk',
+        'pussyy', 'sexxx', 'xxxx', 'kkkk', 'wtff', 'slutt',
+        'siktr', 'sktr_git', 'skm', 'skrm', 'btch', 'b_t_c_h', 'stfu', 'gtfo',
+        'sikimi', 'sikime', 'sikimden', 'sikler', 'gotunu', 'gotune', 'gotum', 'gotler', 'bokluk', 'boklar', 'boktan',
+        'bokum', 'salaklar', 'salaklik', 'salaksin', 'salagim', 'aptallar', 'aptallik', 'aptalsin', 'ahmaklar', 'ahmagi',
+        'sapiklar', 'gavurlar', 'pustlar', 'pezolar', 'yaragim', 'tasaklar', 'tasagi', 'picler', 'piclik',
+        'amcuk', 'amcugu', 'kancuk', 'biatch', 'biotch', 'bytch', 'mofo', 'mofos', 'pr0n', 'pron', 'prooon', 'dicks',
+        'penises', 'trannies', 'adolf', 'nazis',
+        // çok anlamlı kelime + BİLİNMEYEN eşlikçi: güvenli tarafta kalıp engellenir
+        'my_got', 'dick_ali', 'big_dick', 'dick_pic', 'dick_head', 'isis_ali', 'isis_tr', 'pic_ali', 'adolf_ali',
+        'on_pic', 'at_pic', 'ya_got', 'kike', 'kike_ali', 'kikes', 'ipneler', 'ipnesi', 'ipneyim',
     ],
     'impersonation' => [
         'admin', '4dm1n', 'adm1n', 'the_admin', 'admin_tr', 'sysadmin', 'Administrator', 'adminali', 'moderator',
@@ -47,6 +60,9 @@ $blocked = [
         'destekekibi', 'destek1', 'resmi', 'resmi_hesap', 'resmihesap', 'official', 'sutvegol_official', 'unofficial',
         'yonetici', 'yetkili', 'support', 'cpu', 'globalmedia', 'gmgaming', 'app_store', 'staff', 'ad_min',
         'musteri_hizmetleri',
+        // uygulamanın kendi etiketleri ve yönetici yeniden adlandırma biçimi oyuncu_NNNN (kayıtta rezerve)
+        'Engellenen_oyuncu', 'Engellenen oyuncu', 'engellenen_oyuncu_ali', 'Kayitli_oyuncu', 'Kayıtlı rakip', 'kayitli_rakip',
+        'oyuncu_1234', 'Oyuncu_7', 'oyuncu_123456', '0yuncu_99', 'oyuncu_ali_99',
     ],
 ];
 
@@ -81,6 +97,37 @@ $allowed = [
     'pr0_player', 'xxxtentacion', 'striker99', 'goalgetter', 'messi10', 'ronaldo7', 'neymar_jr', 'the_kicker', 'curve_master', 'NightOwl',
     'bassline', 'mass_effect', 'assist_king', 'grasshopper', 'Scorpion', 'shooter_x', 'falso_kral', 'aksam',
     'sabah', 'gece', 'yildiz', 'ates', 'buz', 'firtina', 'kasirga', 'yagmur', 'bulut', 'deniz', 'nehir', 'orman',
+    // bağımsız inceleme yanlış pozitifleri: gerçek ad ve sıradan İngilizce (yanlarında bilinen masum eşlikçi var)
+    'dick_advocaat', 'i_got_it', 'my_pic', 'isis_ay', 'you_got_it', 'got_milk', 'profile_pic', 'pic_of_the_day',
+    'moby_dick', 'dick_van_dyke', 'adolf_dassler', 'isis_valverde', 'kike_garcia', 'kike_hermoso',
+    // yeni kuralların yakınındaki masumlar: içteki çift harf, ı/ş katlaması ("şike", "sıkı"), benzer kökler
+    'sikkim', 'sike_davasi', 'siki_dur', 'sikintisiz', 'siklet', 'boku_no_hero', 'bokeh_king', 'boksor_ali',
+    'goturdu', 'gotze_10', 'gotland', 'gottfried', 'gotti', 'gotcha', 'gotten', 'forgotten', 'adolfo', 'adolph_ali',
+    'bitcoin', 'btc_king', 'batch_ali', 'butch', 'pronto', 'pronoun', 'skim_milk', 'skrill', 'mass_ali', 'bass_ali',
+    'pezzo', 'yarasa', 'yarar_ali', 'salata_kral', 'salih', 'saliha', 'tasarruf', 'picante', 'piccolo', 'pickup',
+    'picard', 'sikayetvar', 'risktir', 'asktir', 'kasktir', 'salaka', 'amca', 'amcam', 'amcazade', 'bokolu',
+    'sikkeci', 'gotham_city',
+    // rezerve ada benzeyen ama farklı adlar
+    'oyuncu', 'oyuncu_ali', 'oyuncu1234', 'oyuncular', 'yeni_oyuncu', 'oyuncu_x', 'engelli', 'kayitli', 'kayit_ol',
+    'rakip_ali', 'engel_kral',
+    // futbolcu, teknik direktör ve takım adları
+    'arda_turan', 'hakan_sukur', 'burak_yilmaz', 'cenk_tosun', 'okay_yokuslu', 'mert_gunok', 'volkan_demirel',
+    'rustu_recber', 'emre_belozoglu', 'nihat_kahveci', 'tuncay_sanli', 'hamit_altintop', 'caner_erkin', 'cuneyt_cakir',
+    'fatih_terim', 'senol_gunes', 'mario_gotze', 'daniel_shittu', 'dickson_etuhu', 'assou_ekotto', 'phillip_cocu',
+    'sissoko', 'haaland', 'mbappe', 'lewandowski', 'zlatan', 'ronaldinho', 'icardi', 'osimhen', 'dzeko',
+    'kerem_akturkoglu', 'galatasaray', 'fenerbahce', 'besiktas', 'trabzonspor', 'basaksehir', 'kasimpasa',
+    'sivasspor', 'konyaspor', 'alanyaspor', 'antalyaspor', 'gaziantep_fk', 'hatayspor', 'rizespor', 'samsunspor',
+    'kayserispor', 'ankaragucu', 'karagumruk', 'goztepe', 'bursaspor', 'amedspor', 'pendikspor', 'bodrumspor',
+    'eyupspor', 'real_madrid', 'barcelona', 'liverpool', 'chelsea', 'juventus', 'bayern_munchen', 'dortmund', 'ajax',
+    'celtic', 'tottenham', 'sassuolo', 'cagliari',
+    // içinde yasaklı parça geçen yaygın İngilizce sözcükler ve yer adları
+    'cockpit', 'cockney', 'hancock', 'peacock', 'woodcock', 'middlesex', 'sextet', 'torpedo', 'scrape', 'raccoon',
+    'tycoon', 'cartoon', 'balloon', 'mishit', 'shiitake', 'titanic', 'passenger', 'compass', 'passport', 'assistant',
+    'assembly', 'massimo', 'bassett', 'penistone', 'analyst', 'cumbria',
+    // yaygın Türkçe adlar, ünlüler ve yer adları
+    'asik_veysel', 'aslihan', 'ayse', 'fatma', 'hatice', 'mustafa', 'ahmet', 'huseyin', 'ibrahim', 'cem_yilmaz',
+    'tarkan', 'sezen_aksu', 'kemal_sunal', 'sener_sen', 'ataturk', 'bogazici', 'kapadokya', 'pamukkale', 'istanbul_34',
+    'ankara_06', 'izmir_35', 'bursa_16', 'trabzon_61', 'samsun_55', 'van_65', 'amed_21',
 ];
 
 $fn = []; $fp = [];
@@ -107,6 +154,56 @@ check(mod_name_reason('Piç') === 'profanity' && mod_name_reason('ORUSPU') === '
 check(mod_name_reason('Işık') === null && mod_name_reason('Gökhan') === null && mod_name_reason('Şükrü') === null, 'Türkçe masum adlar');
 check(mod_name_reason('İbne') === 'profanity' && mod_name_reason('YÖNETİCİ') === 'impersonation', 'büyük İ katlanır');
 check(mod_name_reason('@dmin') === 'impersonation' && mod_name_reason('$ik') === 'profanity', '@→a, $→s');
+
+// Tekrar inceltme: son ünsüz her uzunlukta, üç+ yığın tek (dört+ ise iki) harfe iner; içteki çift harf, çift ünlü
+// ve "gott" dokunulmaz (tek harfe indirseydik sikkim → sikim, book → bok, mood → mod, seeks → seks, gott → got).
+check(mod_exact_match('sikk') === 'sik' && mod_exact_match('amkkk') === 'amk' && mod_exact_match('aqqq') === 'aq'
+    && mod_exact_match('siiik') === 'sik' && mod_exact_match('assss') === 'ass' && mod_exact_match('xxxxx') === 'xxx'
+    && mod_exact_match('gottt') === 'got', 'tekrar inceltme');
+check(mod_exact_match('sikkim') === null && mod_exact_match('book') === null && mod_exact_match('mood') === null
+    && mod_exact_match('seeks') === null && mod_exact_match('mass') === null && mod_exact_match('gott') === null
+    && mod_exact_match('assess') === null, 'içteki çift harf ve gott geçer');
+// Kural testi: listedeki HER bütün parça kelimesi son harfini uzatınca (ünsüzse +1 ve +2, ünlüyse +2) da engellenir.
+foreach (MOD_EXACT as $word) {
+    $last = $word[strlen($word) - 1];
+    $consonant = !str_contains('aeiou', $last);
+    $variants = [$word . $last . $last];
+    if ($consonant && !in_array($word, MOD_EXACT_NOSTRETCH, true)) $variants[] = $word . $last;
+    foreach ($variants as $v) check(mod_name_reason($v) !== null, "uzatılmış kelime engellenmeli: $v");
+}
+// Türkçe kök + ek: üretilen HER biçim engellenir; masum sıkı/şike/şikayet/boku biçimleri üretilmez.
+$trForms = mod_tr_forms();
+foreach ($trForms as $form) check(mod_name_reason($form) !== null, "kök+ek biçimi engellenmeli: $form");
+foreach (['sikayet', 'sikinti', 'siki', 'sikin', 'sike', 'sika', 'sikici', 'boku', 'boka', 'bokser', 'gotur', 'gotik', 'salata'] as $innocent) {
+    check(!in_array($innocent, $trForms, true), "masum biçim kök+ek üretimine girmemeli: $innocent");
+}
+check(in_array('salaklar', $trForms, true) && in_array('sikimi', $trForms, true) && in_array('gotunu', $trForms, true)
+    && in_array('bokluk', $trForms, true) && in_array('aptallik', $trForms, true) && in_array('salagim', $trForms, true)
+    && count($trForms) > 300, 'kök+ek üretimi: ' . count($trForms) . ' biçim');
+// Kısaltma ve ünlü uyumu (MOD_CONTAINS'e otomatik eklenir).
+check(mod_abbrev('siktir') === ['sktir', 'siktr', 'sktr'] && mod_abbrev('bitch') === ['btch'] && mod_abbrev('amk') === [],
+    'ünlüsüz kısaltma: ' . json_encode(mod_abbrev('siktir')));
+$contains = mod_contains_words();
+check(in_array('amcuk', $contains, true) && in_array('amcug', $contains, true) && in_array('kancuk', $contains, true),
+    'ünlü uyumu varyantı MOD_CONTAINS\'te');
+// Kısaltmalar yalnız bütün parça: parça içinde aransaydı "-tir" ekli sözcükler (risktir, asktir) engellenirdi.
+check(mod_exact_match('siktr') === 'siktr' && mod_exact_match('sktir') === 'sktir' && mod_exact_match('btch') === 'btch'
+    && !in_array('sktir', $contains, true) && !in_array('siktr', $contains, true), 'kısaltma yalnız bütün parça');
+// Çok anlamlı kelime: yalnız HEMEN yanındaki listedeki eşlikçi masum yapar.
+check(mod_homonym_ok(['i', 'got', 'it'], 1, 'got') && mod_homonym_ok(['my', 'pic'], 1, 'pic')
+    && mod_homonym_ok(['dick', 'advocaat'], 0, 'dick') && mod_homonym_ok(['isis', 'ay'], 0, 'isis')
+    && mod_homonym_ok(['moby', 'dick'], 1, 'dick'), 'çok anlamlı kelime: bilinen eşlikçi');
+check(!mod_homonym_ok(['got'], 0, 'got') && !mod_homonym_ok(['got', 'lale'], 0, 'got') && !mod_homonym_ok(['my', 'got'], 1, 'got')
+    && !mod_homonym_ok(['big', 'x', 'dick'], 2, 'dick') && !mod_homonym_ok(['i', 'x', 'got'], 2, 'got')
+    && !mod_homonym_ok(['sik', 'it'], 0, 'sik'), 'çok anlamlı kelime: eşlikçi yok / uzak / listede olmayan kelime');
+// Rezerve adlar: etiketler her yerde, oyuncu_NNNN yalnız kayıtta ($strict). Yönetici adı verilen oyuncu görünür kalır.
+check(mod_name_reason('oyuncu_1234') === 'impersonation' && mod_name_reason('oyuncu_1234', false) === null
+    && mod_name_reason('Oyuncu_7', false) === null && mod_name_reason('oyuncu_ali_99') === 'impersonation'
+    && mod_name_reason('oyuncu_ali') === null && mod_name_reason('oyuncu1234') === null && mod_name_reason('oyuncu_') === null,
+    'oyuncu_NNNN yalnız kayıtta rezerve');
+check(mod_name_reason('Engellenen_oyuncu', false) === 'impersonation' && mod_name_reason('Kayıtlı rakip', false) === 'impersonation'
+    && mod_name_reason('Siktir', false) === 'profanity' && mod_name_reason('gol_kral', false) === null,
+    'etiketler ve küfür görüntüleme maskesinde de');
 
 // Biçimler ve yardımcılar.
 $f = mod_forms('S1k_7_ali1907');

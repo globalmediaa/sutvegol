@@ -4,7 +4,8 @@
 Kendi tek kullanımlık test DB'sini canlıdaki gibi utf8mb4_0900_ai_ci varsayılanıyla açar
 (users.username ile karşılaştırılan sütunlarda harmanlama karışımı burada patlar), API için
 `php -S backend/public`, yönetim paneli için ikinci bir `php -S backend/admin` başlatır.
-Kapsam: kullanıcı adı filtresi (kayıt, /v1/username/check, sosyal ad seçimi) + koşul sürümü,
+Kapsam: kullanıcı adı filtresi (kayıt, /v1/username/check, sosyal ad seçimi; bağımsız inceleme kuralları:
+son harf uzatma / kök + ek / kısaltma, çok anlamlı kelime, rezerve adlar) + koşul sürümü,
 şikâyet doğrulaması / idempotentlik / günlük sınır / 410, 3 şikâyette "Oyuncu#XXXX" gizleme
 (sıralama + canlı düello), eski uygunsuz adın maskelenmesi, engelleme (liste, sıralama etiketi,
 iki yönlü eşleşme, rövanş, kayıtlı rakip havuzu), ghost sahibine şikâyet bağlamı, yönetici
@@ -183,10 +184,45 @@ class Moderation(unittest.TestCase):
         self.assertEqual((s, r['user']['termsVersion']), (200, 0), r)
         self.assertEqual(self.s.get('/v1/me', r['accessToken'])[1]['user']['termsVersion'], 0)
 
+    def test_01b_independent_review_rules(self):
+        # Bağımsız incelemenin kaçakları: kural düzeyinde (uzatma, ek, kısaltma, benzer yazım) engellenir.
+        leaks = ['aqq', 'amkk', 'sikk', 'siktr', 'sikimi', 'gotunu', 'bokluk', 'amcuk', 'salaklar', 'adolf', 'biatch',
+                 'mofo', 'pr0n', 'AmKKK', 's1kk', 'Salaklik', 'gotune']
+        for bad in leaks:
+            mysql("DELETE FROM api_rate_limits")
+            s, r = self.s.get(f'/v1/username/check?username={bad}')
+            self.assertEqual((r['valid'], r['allowed'], r['code']), (True, False, 'username_not_allowed'), bad)
+            s, r = self.register(bad)
+            self.assertEqual((s, r['error']['code']), (422, 'username_not_allowed'), bad)
+        # Yanlış pozitifler: gerçek ad ve sıradan İngilizce geçer (kayıt gerçekten oluşur).
+        for good in ['dick_advocaat', 'i_got_it', 'my_pic', 'isis_ay', 'sikkim', 'gott', 'sike_davasi', 'risktir']:
+            mysql("DELETE FROM api_rate_limits")
+            s, r = self.s.get(f'/v1/username/check?username={good}')
+            self.assertEqual((r['allowed'], r['available']), (True, True), good)
+            s, r = self.register(good)
+            self.assertEqual((s, r['user']['username']), (200, good), r)
+        # Çok anlamlı kelime + bilinmeyen eşlikçi ve yalnız başına: engel.
+        for bad in ['got', 'pic', 'dick', 'isis', 'got_lale', 'dick_ali']:
+            self.assertEqual(self.register(bad)[1]['error']['code'], 'username_not_allowed', bad)
+        # Rezerve adlar: uygulamanın etiketleri ve yönetici yeniden adlandırma biçimi (oyuncu_NNNN).
+        for reserved in ['Engellenen_oyuncu', 'engellenenoyuncu', 'Kayitli_oyuncu', 'kayitli_rakip', 'Kayitlirakip',
+                         'oyuncu_1234', 'Oyuncu_7', 'oyuncu_123456', 'oyuncu_ali_99']:
+            mysql("DELETE FROM api_rate_limits")
+            s, r = self.s.get(f'/v1/username/check?username={reserved}')
+            self.assertEqual((r['allowed'], r['code']), (False, 'username_not_allowed'), reserved)
+            s, r = self.register(reserved)
+            self.assertEqual((s, r['error']['code']), (422, 'username_not_allowed'), reserved)
+        # Boşluklu biçim zaten geçersiz karakterdir; benzer ama farklı adlar alınabilir.
+        mysql("DELETE FROM api_rate_limits")
+        s, r = self.s.post('/v1/auth/register', dict(email='bosluk@x.local', password='password1', username='Engellenen oyuncu'))
+        self.assertEqual((s, r['error']['code']), (422, 'invalid_username'))
+        for ok in ['oyuncu_ali', 'oyuncular', 'yeni_oyuncu', 'oyuncu1234']:
+            self.assertEqual(self.register(ok)[0], 200, ok)
+
     def test_02_choose_username_social_flow(self):
         u = self.s.register('mo_sosyal')
         mysql("UPDATE users SET username=NULL,username_key=NULL WHERE username='mo_sosyal'")
-        for bad in ['admin_tr', 'ibne', 'g00gle']:
+        for bad in ['admin_tr', 'ibne', 'g00gle', 'amkk', 'Kayitli_oyuncu', 'oyuncu_77']:
             s, r = self.s.put('/v1/me/username', dict(username=bad), u['token'])
             self.assertEqual((s, r['error']['code']), (422, 'username_not_allowed'), bad)
         s, r = self.s.put('/v1/me/username', dict(username='temiz_sosyal', termsVersion=1), u['token'])
@@ -403,6 +439,11 @@ class Moderation(unittest.TestCase):
         self.assertEqual(status, 200); self.assertIn('→ @oyuncu_', html)
         new = last(f"SELECT username FROM users WHERE public_id='{rezil}'")
         self.assertRegex(new, r'^oyuncu_\d{4}$')
+        # Yönetici adı filtrenin rezerve kuralına takılmaz: sıralamada adıyla görünür; aynı ad kayıtta rezerve.
+        self.play('rezil')
+        self.assertEqual(self.board('ana')[rezil]['username'], new)
+        self.assertEqual(self.board()[rezil]['username'], new)
+        self.assertEqual(self.register(new)[1]['error']['code'], 'username_not_allowed')
         self.assertEqual(last("SELECT CONCAT(name_key,'|',name_norm) FROM name_bans WHERE name_key='mo_rezil'"), 'mo_rezil|morezil')
         self.assertEqual(last(f"SELECT GROUP_CONCAT(DISTINCT status) FROM user_reports WHERE target_id={self.uid('rezil')}"), 'actioned')
         # Yasaklı ad ve varyantları alınamaz.
