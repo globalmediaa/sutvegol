@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 ve altı otomatik yedekleme kuralları. -->
+<full-backup-content>
+    <!-- flutter_secure_storage: anahtarı Android Keystore'da; yedekten dönen şifreli
+         değerler çözülemez. Oturum yeniden girişle gelir, misafir ilerlemesi yedeklenir. -->
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+    <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml"/>
+</full-backup-content>

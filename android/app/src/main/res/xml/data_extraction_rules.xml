@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ bulut yedeği ve cihazdan cihaza aktarım kuralları. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- flutter_secure_storage: anahtarı Android Keystore'da; yedekten dönen şifreli
+             değerler çözülemez. Oturum yeniden girişle gelir, misafir ilerlemesi yedeklenir. -->
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <!-- flutter_secure_storage: anahtarı Android Keystore'da; yedekten dönen şifreli
+             değerler çözülemez. Oturum yeniden girişle gelir, misafir ilerlemesi yedeklenir. -->
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml"/>
+    </device-transfer>
+</data-extraction-rules>

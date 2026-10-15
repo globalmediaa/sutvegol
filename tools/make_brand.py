@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Marka görsellerini tek kaynaktan (assets/brand/app-icon.png) üretir:
-dış zemini şeffaf amblem, iOS/Android ikon setleri ve iOS açılış görseli."""
+dış zemini şeffaf amblem, iOS/Android ikon setleri (Android uyarlanabilir ikon dahil)
+ve iOS açılış görseli."""
 
 import json
 from pathlib import Path
@@ -135,6 +136,43 @@ def make_android_icons(icon):
         save(icon.resize((n, n), Image.LANCZOS), ANDROID_RES / f"mipmap-{dpi}/ic_launcher.png")
 
 
+def make_android_adaptive(icon, mark):
+    """Android 8+ uyarlanabilir ikon: lacivert zemin rengi + şeffaf amblem ön katmanı,
+    Android 13 tema ikonları için tek renkli katman. Amblemin en uç noktası merkezden
+    genişliğin ~%53'ü uzakta; 108 dp tuvalde 62 dp'ye ölçeklenince 66 dp güvenli
+    dairenin içinde kalır (yuvarlak maskede kesilmez)."""
+    bg = edge_color(icon)
+    lum = mark.convert("L")
+    lo, hi = sum(bg) / 3, 255
+    mono_alpha = ImageChops.multiply(
+        mark.split()[3], lum.point(lambda v: max(0, min(255, round((v - lo) / (hi - lo) * 255 * 1.6))))
+    )
+    mono = Image.new("RGBA", mark.size, (255, 255, 255, 0))
+    mono.putalpha(mono_alpha)
+    for dpi, n in ANDROID_SIZES.items():
+        canvas = round(n * 108 / 48)
+        size = round(canvas * 62 / 108)
+        off = ((canvas - size) // 2,) * 2
+        for layer, name in ((mark, "ic_launcher_foreground"), (mono, "ic_launcher_monochrome")):
+            img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+            img.alpha_composite(layer.resize((size, size), Image.LANCZOS), off)
+            save(img, ANDROID_RES / f"mipmap-{dpi}/{name}.png")
+    (ANDROID_RES / "mipmap-anydpi-v26").mkdir(exist_ok=True)
+    (ANDROID_RES / "mipmap-anydpi-v26/ic_launcher.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+        '    <background android:drawable="@color/ic_launcher_background"/>\n'
+        '    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n'
+        '    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>\n'
+        "</adaptive-icon>\n"
+    )
+    (ANDROID_RES / "values/ic_launcher_background.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
+        f'    <color name="ic_launcher_background">#{bg[0]:02X}{bg[1]:02X}{bg[2]:02X}</color>\n'
+        "</resources>\n"
+    )
+
+
 if __name__ == "__main__":
     icon = Image.open(ICON).convert("RGB")
     mark = make_mark(icon)
@@ -142,4 +180,5 @@ if __name__ == "__main__":
     make_launch(mark)
     make_ios_icons(icon)
     make_android_icons(icon)
-    print("Şeffaf amblem, iOS/Android ikonları ve açılış görseli üretildi.")
+    make_android_adaptive(icon, mark)
+    print("Şeffaf amblem, iOS/Android (uyarlanabilir dahil) ikonları ve açılış görseli üretildi.")

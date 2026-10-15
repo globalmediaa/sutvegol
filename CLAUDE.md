@@ -48,6 +48,8 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - `flutter test` — swipe → şut widget testi.
 - Simülatör: Xcode 27'de `flutter build ios --simulator` iki mimaride `lipo -verify_arch` hatası verir; tek mimari derle: `cd ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator -destination 'id=<UDID>' -derivedDataPath ../build/ios-sim ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build` → `xcrun simctl install booted build/ios-sim/Build/Products/Debug-iphonesimulator/Runner.app` → `xcrun simctl launch booted com.globalmedia.sutVeGol`.
 - Telefon: `flutter run -d 00008140-001059EA14D8801C --release` (Team Y2MWRALQHR).
+- Android / Google Play: `bash tools/build_android.sh` → `build/play/sut-ve-gol-<sürüm>-<kod>.aab` (yükleme anahtarı repo dışında `~/.android/sutvegol-release/`). Mağaza metinleri, veri güvenliği ve içerik yanıtları `store/google-play/listing_tr_en.md`.
 
 ## Mağaza görselleri
+- Google Play: `flutter test test/play_store_assets_test.dart --dart-define=EXPORT_PLAY_ASSETS=true` → `store/google-play/` (ham 1080×2400 ekranlar, TR/EN 1080×1920 kareler, 1024×500 öne çıkan grafik, 512 simge). Gerçek oyun kodundan çizilir, emülatör gerekmez.
 - `python3 tools/make_store_artwork.py` → `store/appstore/` içine App Store ürün sayfası başlığı (21:9, 3840×1646) ve arama sonucu (3:2, 3840×2560) görsellerini PNG+JPG, alfasız üretir. Kaynak `tools/store_artwork/index.html` (headless Chrome ile çizilir; logo, docs/assets sahne görüntüleri, Titillium).
