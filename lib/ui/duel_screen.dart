@@ -7,8 +7,10 @@ import '../duel/duel_controller.dart';
 import '../duel/duel_protocol.dart';
 import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
+import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/moderation_service.dart';
+import 'ad_banner.dart';
 import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -39,6 +41,10 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
       );
   SutVeGolGame? _mine, _replica;
   bool _loaded = false, _started = false, _closing = false, _rematched = false;
+
+  /// Biten maç reklam sıklığına bir kez sayılır; çıkış reklamı sürerken
+  /// butonlar ikinci kez tetiklenmez.
+  bool _counted = false, _exiting = false;
   Timer? _clock;
   final List<ShotRecord> _pending = [];
 
@@ -117,6 +123,10 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
 
   void _changed() {
     if (!mounted) return;
+    if (_c.phase == DuelPhase.finished && !_counted) {
+      _counted = true;
+      AdService.instance.duelFinished();
+    }
     final s = _c.snapshot;
     if (s != null && _mine == null && widget.renderGames) {
       _mine = SutVeGolGame(mode: GameMode.duel, seed: s.seed)
@@ -272,11 +282,21 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
     if (left) Navigator.of(context).pop();
   }
 
-  void _again() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const DuelScreen()),
-    );
+  /// Sonuç ekranından çıkış (yeni rakip / tek kişilik): sıra geldiyse önce
+  /// geçiş reklamı. Rövanşta reklam yok (iki oyuncu da bekliyor).
+  Future<void> _exitResult(VoidCallback go) async {
+    if (_exiting) return;
+    setState(() => _exiting = true);
+    await AdService.instance.maybeShowInterstitial(AdMoment.duelExit);
+    if (!mounted) return;
+    go();
   }
+
+  void _again() => _exitResult(
+    () => Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => const DuelScreen()),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -494,6 +514,11 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
               enabled: !_closing,
               height: 52,
             ),
+            // Rakip aranırken (en çok ~15 sn) butonlardan uzakta reklam kutusu.
+            if (_c.phase != DuelPhase.error) ...[
+              const SizedBox(height: 32),
+              const AdBanner.box(),
+            ],
           ],
         ),
       ),
@@ -859,6 +884,7 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                   label: 'YENİ RAKİP',
                   icon: Icons.sports_soccer_rounded,
                   onTap: _again,
+                  enabled: !_exiting,
                   primary: r == null || !_c.rematchOpen,
                   height: 52,
                   width: double.infinity,
@@ -868,7 +894,8 @@ class _DuelScreenState extends State<DuelScreen> with WidgetsBindingObserver {
                   label: 'TEK KİŞİLİK OYUNA DÖN',
                   icon: Icons.arrow_back_rounded,
                   primary: false,
-                  onTap: () => Navigator.of(context).pop(),
+                  enabled: !_exiting,
+                  onTap: () => _exitResult(() => Navigator.of(context).pop()),
                   height: 48,
                   width: double.infinity,
                   fontSize: 15,

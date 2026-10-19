@@ -37,7 +37,9 @@ if [[ -n "$google" ]]; then
 fi
 
 cd "$ROOT"
-echo "==> Şut ve Gol $name ($code) — Google girişi: $([[ -n "$google" ]] && echo açık || echo kapalı)"
+# Reklam birimleri kodda (AdUnits); release paketi mağaza birimlerini kullanır.
+# ADMOB_TEST burada asla verilmez: test reklamlı paket gelir getirmez.
+echo "==> Şut ve Gol $name ($code) — Google girişi: $([[ -n "$google" ]] && echo açık || echo kapalı) · reklamlar: AdMob mağaza birimleri"
 flutter build appbundle --release ${defines[@]+"${defines[@]}"}
 
 aab="$ROOT/build/app/outputs/bundle/release/app-release.aab"

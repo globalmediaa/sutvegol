@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../game/sut_ve_gol_game.dart';
 import '../game/sfx.dart';
+import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/progress_service.dart';
+import 'ad_banner.dart';
 import 'leaderboard_screen.dart';
 import 'led_painter.dart';
 import 'theme.dart';
@@ -13,6 +15,8 @@ import 'widgets.dart';
 
 /// Oyun sonu perdesi: bulanık karartma, üstte çıkış, cam kart (sayaçla artan
 /// skor, rekor, sahne), sıra paneli ve "TEKRAR OYNA" hap butonu.
+/// Reklam: "TEKRAR OYNA"da sıklık sınırlı geçiş reklamı, isteğe bağlı ödüllü
+/// "Kral Moduyla başla" ve altta banner (butonlardan uzak; sığmazsa yok).
 class GameOverOverlay extends StatefulWidget {
   const GameOverOverlay({
     super.key,
@@ -44,6 +48,9 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   );
   bool _rankReady = false;
 
+  /// Reklam / yeniden başlatma sürerken butonlar ikinci kez tetiklenmez.
+  bool _busy = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +75,32 @@ class _GameOverOverlayState extends State<GameOverOverlay>
     super.dispose();
   }
 
+  /// [fever]: ödüllü reklamla Kral Modu'nda başla; aksi hâlde sıra geldiyse
+  /// geçiş reklamı, sonra yeni koşu.
+  Future<void> _replay({bool fever = false}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final game = widget.game;
+    final ads = AdService.instance;
+    if (fever) {
+      final result = await ads.showRewarded(
+        onOpen: game.suspendForAd,
+        onClose: game.resumeAfterAd,
+      );
+      if (result == RewardResult.skipped) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+    } else {
+      await ads.maybeShowInterstitial(
+        AdMoment.soloReplay,
+        onOpen: game.suspendForAd,
+        onClose: game.resumeAfterAd,
+      );
+    }
+    game.restart(feverStart: fever);
+  }
+
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
@@ -77,6 +110,8 @@ class _GameOverOverlayState extends State<GameOverOverlay>
       builder: (context, c) {
         final s = min(c.maxWidth / 440, c.maxHeight / 760).clamp(0.0, 1.0);
         final top = MediaQuery.paddingOf(context).top;
+        final bottom = MediaQuery.paddingOf(context).bottom;
+        final buttonsEnd = widget.onDuel != null ? 630 * s + 48 : 620 * s;
         return FadeTransition(
           opacity: _fade,
           child: Stack(
@@ -104,6 +139,12 @@ class _GameOverOverlayState extends State<GameOverOverlay>
                 ),
               ),
               Positioned(
+                left: 24 * s,
+                right: 24 * s,
+                top: 495 * s,
+                child: Center(child: _feverOffer(s)),
+              ),
+              Positioned(
                 left: 0,
                 right: 0,
                 top: 560 * s,
@@ -111,7 +152,8 @@ class _GameOverOverlayState extends State<GameOverOverlay>
                   child: PillButton(
                     label: 'TEKRAR OYNA',
                     icon: Icons.replay_rounded,
-                    onTap: game.restart,
+                    onTap: _replay,
+                    enabled: !_busy,
                     height: 60 * s,
                     fontSize: 19 * s,
                   ),
@@ -133,12 +175,79 @@ class _GameOverOverlayState extends State<GameOverOverlay>
                     ),
                   ),
                 ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: bottom + 8,
+                child: Center(
+                  child: AdBanner.anchored(
+                    maxHeight: c.maxHeight - bottom - 8 - buttonsEnd - 20,
+                  ),
+                ),
+              ),
             ],
           ),
         );
       },
     );
   }
+
+  /// Ödüllü teklif: reklam hazırsa ve yeni oyuncu değilse görünür.
+  Widget _feverOffer(double s) => ListenableBuilder(
+    listenable: AdService.instance,
+    builder: (context, _) {
+      if (!AdService.instance.canOfferFeverStart) {
+        return const SizedBox.shrink();
+      }
+      return GestureDetector(
+        key: const Key('fever-start-offer'),
+        onTap: _busy ? null : () => _replay(fever: true),
+        child: Container(
+          height: 54 * s,
+          padding: EdgeInsets.symmetric(horizontal: 18 * s),
+          decoration: BoxDecoration(
+            color: FK.gold.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(27 * s),
+            border: Border.all(
+              color: FK.gold.withValues(alpha: .7),
+              width: 1.4,
+            ),
+          ),
+          // Dar ekranda satır kırpılmaz, birlikte küçülür.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.smart_display_rounded, color: FK.gold, size: 24 * s),
+                SizedBox(width: 10 * s),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'KRAL MODUYLA BAŞLA',
+                      style: FK.t(
+                        size: 15 * s,
+                        w: FontWeight.w700,
+                        color: FK.gold,
+                        spacing: 1 * s,
+                      ),
+                    ),
+                    SizedBox(height: 2 * s),
+                    Text(
+                      'Reklam izle · ilk 10 sn altın top, x2 puan',
+                      style: FK.t(size: 11.5 * s, color: FK.muted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
   Widget _card(double s, SutVeGolGame game, int rank, bool isRecord) {
     return GlassCard(

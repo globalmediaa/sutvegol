@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import 'ad_banner.dart';
 import '../services/game_service.dart';
 import '../services/moderation_service.dart';
 import 'moderation_ui.dart';
@@ -50,6 +51,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    bottomNavigationBar: const AdBanner.anchored(safeArea: true),
     appBar: AppBar(
       title: const Text('Sıralama'),
       actions: AuthService.instance.user == null

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../game/sut_ve_gol_game.dart';
+import '../services/ad_service.dart';
 import '../services/moderation_service.dart';
 import '../services/progress_service.dart';
 import 'leaderboard_screen.dart';
@@ -316,6 +317,12 @@ class _PauseOverlayState extends State<PauseOverlay>
                 onPressed: () => _open(kTermsUrl),
                 child: const Text('Koşullar'),
               ),
+              // AB/BK/İsviçre: reklam onayını değiştirme yolu (UMP zorunluluğu).
+              if (AdService.instance.privacyOptionsRequired)
+                TextButton(
+                  onPressed: AdService.instance.showPrivacyOptions,
+                  child: const Text('Reklam tercihleri'),
+                ),
               TextButton(
                 onPressed: () => _open('https://sutvegol.gmgaming.app/#destek'),
                 child: const Text('Destek'),

@@ -36,6 +36,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // AdMob uygulama kimliği (Android). Reklam birimleri lib/services/ad_service.dart →
+        // AdUnits: release'de gerçek, debug ve --dart-define=ADMOB_TEST=true derlemelerinde test.
+        manifestPlaceholders["admobAppId"] = System.getenv("ADMOB_APP_ID")
+            ?: "ca-app-pub-5952420054302125~9450721786"
     }
 
     signingConfigs {

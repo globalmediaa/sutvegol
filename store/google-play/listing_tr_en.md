@@ -1,6 +1,6 @@
 # Şut ve Gol — Google Play mağaza içeriği
 
-Paket: `com.globalmedia.sut_ve_gol` · Sürüm adı `1.0.0` · Sürüm kodu `13` · Ücretsiz · Reklam yok · Uygulama içi satın alma yok
+Paket: `com.globalmedia.sut_ve_gol` · Sürüm adı `1.0.0` · Sürüm kodu `13` · Ücretsiz · Reklam içerir (Google AdMob) · Uygulama içi satın alma yok
 
 Uygulama türü: **Oyun** · Kategori: **Spor** · Etiket önerileri: Futbol, Gündelik (Casual), Arcade, Tek oyunculu, Çok oyunculu (çevrimiçi rekabet), Stilize
 
@@ -70,7 +70,7 @@ KOLAY ÖĞREN
 • İlk açılışta kısa bir rehber nişanı, falsoyu ve gücü adım adım gösterir; istersen geçebilirsin.
 • Duraklat menüsündeki "Nasıl oynanır" rehberi istediğin an yeniden açar.
 
-Tüm çizimler ve sesler oyuna özgüdür. Ses ve titreşim duraklat menüsünden açılıp kapatılabilir. Reklam yok, uygulama içi satın alma yok.
+Tüm çizimler ve sesler oyuna özgüdür. Ses ve titreşim duraklat menüsünden açılıp kapatılabilir. Ücretsizdir; reklamlar yalnız oyun aralarında çıkar, şut atarken asla. Uygulama içi satın alma yok.
 
 **Sürüm notları (tr-TR, 203/500):**
 Şut ve Gol Android'de! Parmağınla kaydır, falso ver, halkayı vur. Üst üste 5 isabetle Kral Modu'nu aç, sokaktan stadyuma dört sahada ilerle ve 90 saniyelik online düellolarda gerçek rakiplere karşı oyna.
@@ -131,7 +131,7 @@ EASY TO LEARN
 • A short first-run tutorial shows aim, curve and power step by step; you can skip it.
 • "Nasıl oynanır" (How to play) in the pause menu opens it again any time.
 
-All art and sounds are original to the game. Sound and vibration can be turned on or off in the pause menu. No ads, no in-app purchases.
+All art and sounds are original to the game. Sound and vibration can be turned on or off in the pause menu. Free to play; ads appear only between plays, never while you shoot. No in-app purchases.
 
 **Release notes (en-US, 222/500):**
 Şut ve Gol is now on Android! Swipe to shoot, bend the ball and hit the ring. Land 5 in a row to unlock King Mode, play through four pitches from the street to the stadium and take on real rivals in 90-second online duels.
@@ -144,9 +144,13 @@ All art and sounds are original to the game. Sound and vibration can be turned o
 `https://sutvegol.gmgaming.app/privacy`
 
 ### Reklamlar
-**Hayır**, uygulama reklam içermez.
+**Evet**, uygulama reklam içerir (Google AdMob): oyun sonu ve sıralama ekranında banner, düello rakibi aranırken 300×250 kutu, birkaç oyunda bir geçiş reklamı ve isteğe bağlı ödüllü reklamlar ("1 hak daha", "Kral Moduyla başla"). Oyun sırasında reklam yok. Reklam içerik derecesi **T** ile sınırlı (`RequestConfiguration.maxAdContentRating`).
 
-Reklam kimliği beyanı: **Hayır**. Pakette `com.google.android.gms.permission.AD_ID` izni yok (birleştirilmiş manifestte tek izin `INTERNET`).
+Reklam kimliği beyanı: **Evet** — amaçlar: **Reklam veya pazarlama**, **Analiz**, **Dolandırıcılık önleme ve güvenlik** (AdMob ölçüm ve geçersiz trafik koruması). `com.google.android.gms.permission.AD_ID` izni Google Mobile Ads SDK'sından gelir.
+
+Birleştirilmiş manifestteki izinler (google_mobile_ads 9.0.0, `flutter build apk` ile doğrulandı): `INTERNET`, `ACCESS_NETWORK_STATE`, `com.google.android.gms.permission.AD_ID`, `ACCESS_ADSERVICES_AD_ID`, `ACCESS_ADSERVICES_ATTRIBUTION`, `ACCESS_ADSERVICES_TOPICS` (Privacy Sandbox), `WAKE_LOCK`, `FOREGROUND_SERVICE` (SDK'nın WorkManager'ı), `…DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (AndroidX). Hiçbiri çalışma zamanı izni istemez.
+
+AdMob uygulama sayfasında Play mağaza bağlantısı kurulmalı ve `app-ads.txt` (`docs/app-ads.txt`: `google.com, pub-5952420054302125, DIRECT, f08c47fec0942fa0`) mağazadaki geliştirici web sitesinin kökünde yayımlanmalı: `https://sutvegol.gmgaming.app/app-ads.txt`. AdMob "bulunamadı" derse aynı dosya `https://gmgaming.app/app-ads.txt` adresine de konur. Yoksa doluluk düşer.
 
 ### Uygulama erişimi
 **"Tüm işlevler veya bazı işlevler kısıtlanmış"** seçilir ve inceleme hesabı eklenir. Tek kişilik oyun misafir olarak açıktır; online düello, skor gönderme ve Hesabım ekranı yalnız girişle görülür.
@@ -174,9 +178,11 @@ Reklam kimliği beyanı: **Hayır**. Pakette `com.google.android.gms.permission.
 - "Uygulama çocuklara hitap ediyor mu?" sorusu çıkarsa: genel kitleye yönelik gündelik bir spor oyunu; rekabetçi çevrimiçi düello ve sıralama içerir.
 
 ### Veri güvenliği (Data safety)
-Genel: Veriler aktarımda şifreleniyor (**Evet**, yalnız HTTPS). Kullanıcı verilerin silinmesini isteyebilir (**Evet**; uygulamadaki Hesabım ekranından ve hesap silme URL'sinden). Veriler üçüncü taraflarla **paylaşılmıyor** (Hetzner yalnız altyapı hizmet sağlayıcısıdır; Google girişi kullanılırsa veri Google'dan alınır, Google'a gönderilmez). Uygulamada reklam, analitik, çökme raporlama veya takip SDK'sı yok.
+Genel: Veriler aktarımda şifreleniyor (**Evet**, yalnız HTTPS). Kullanıcı verilerin silinmesini isteyebilir (**Evet**; uygulamadaki Hesabım ekranından ve hesap silme URL'sinden). Veriler üçüncü taraflarla **paylaşılıyor: Evet** — yalnız Google Mobile Ads SDK (AdMob) reklam verisini Google'a gönderir. Oyunun kendi sunucusunun verisi paylaşılmaz (Hetzner yalnız altyapı hizmet sağlayıcısıdır; Google girişi kullanılırsa veri Google'dan alınır). Analitik, çökme raporlama veya başka takip SDK'sı yok.
 
-Hepsi **isteğe bağlı**: misafir oyuncunun ilerlemesi yalnız cihazında kalır, sunucuya oyun verisi gönderilmez.
+Hesap verileri **isteğe bağlı**: misafir oyuncunun ilerlemesi yalnız cihazında kalır, sunucuya oyun verisi gönderilmez. Reklam SDK'sının verisi misafir dahil herkesten toplanır (AB/BK/İsviçre'de UMP onayına bağlı).
+
+Reklam satırları Google'ın AdMob veri güvenliği rehberine göre doldurulmalı (https://support.google.com/admob/answer/11581855); başvuru öncesi o sayfayla son kez karşılaştırın.
 
 | Veri türü | Toplanıyor | Paylaşılıyor | Zorunlu mu | Amaç |
 |---|---|---|---|---|
@@ -187,15 +193,20 @@ Hepsi **isteğe bağlı**: misafir oyuncunun ilerlemesi yalnız cihazında kalı
 | Uygulama etkinliği › Kullanıcı tarafından oluşturulan diğer içerik (şikâyetteki isteğe bağlı not) | Evet | Hayır | İsteğe bağlı | Dolandırıcılık önleme, güvenlik ve uyumluluk |
 | Uygulama etkinliği › Diğer işlemler (engellenen oyuncular, şikâyet kaydı, kullanım koşulları onayı, ses/titreşim tercihleri) | Evet | Hayır | İsteğe bağlı | Uygulama işlevi, Dolandırıcılık önleme ve güvenlik |
 | Cihaz veya diğer kimlikler (rastgele kurulum anahtarı, oturum için cihaz adı) | Evet | Hayır | İsteğe bağlı (hesap) | Uygulama işlevi |
+| Cihaz veya diğer kimlikler › Reklam kimliği / uygulama grubu kimliği (AdMob SDK) | Evet | Evet (Google) | Zorunlu | Reklam veya pazarlama, Analiz, Dolandırıcılık önleme ve güvenlik |
+| Konum › Yaklaşık konum (IP'den, AdMob SDK) | Evet | Evet (Google) | Zorunlu | Reklam veya pazarlama, Analiz, Dolandırıcılık önleme ve güvenlik |
+| Uygulama etkinliği › Uygulama etkileşimleri (reklam gösterimi/dokunma, uygulama açılışı; AdMob SDK) | Evet | Evet (Google) | Zorunlu | Reklam veya pazarlama, Analiz, Dolandırıcılık önleme ve güvenlik |
+| Uygulama bilgileri ve performans › Kilitlenme günlükleri, Teşhis (AdMob SDK) | Evet | Evet (Google) | Zorunlu | Analiz, Dolandırıcılık önleme ve güvenlik |
 
-Toplanmayanlar: konum, kişiler, fotoğraf/video, ses, dosyalar, takvim, mesajlar, finans/ödeme, sağlık, web geçmişi, reklam kimliği, çökme günlükleri.
+Toplanmayanlar: kesin konum, kişiler, fotoğraf/video, ses, dosyalar, takvim, mesajlar, finans/ödeme, sağlık, web geçmişi.
 
 > Notlar: (1) Veriler sunucuda saklanır; "Geçici olarak işleniyor" kutusunu işaretlemeyin. (2) Sunucu, hız sınırı için IP adresini tek yönlü özet olarak en fazla iki gün tutar ve erişim günlüklerinde IP bulunur; konum çıkarmak için kullanılmaz, Play'in tanımında "Konum" olarak beyan edilmez. (3) Kurulum anahtarı rastgele üretilir ve donanım kimliği değildir; giriş yapılınca hesaba bağlandığı için yine de beyan edilir. (4) Google girişi açılmadan önce "Google giriş kimliği" ifadesi zararsızdır; açıldıktan sonra da beyan aynı kalır.
 
 ### Diğer beyanlar
 - Haber uygulaması: Hayır · Devlet uygulaması: Hayır · Sağlık: Hayır · Finansal özellikler: **Hiçbiri**
 - Hesap oluşturma var → hesap silme URL'si zorunlu (yukarıda); uygulama içi silme de var.
-- Hassas izinler: yok. Tek izin `INTERNET`. Konum, kamera, depolama, bildirim izni yok.
+- Hassas izinler: yok. İzinler yukarıda (Reklamlar); hepsi kurulum izni. Konum, kamera, depolama, bildirim izni yok.
+- Play Console `FOREGROUND_SERVICE` için ön plan hizmeti beyanı isterse: uygulamanın kendi ön plan hizmeti yok; izin Google Mobile Ads SDK'sının WorkManager bağımlılığından gelir.
 - Ön plan hizmeti, tam ekran bildirim, tam zamanlı alarm: yok.
 
 ---

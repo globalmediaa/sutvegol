@@ -5,10 +5,12 @@ import 'dart:async';
 
 import 'game/sut_ve_gol_game.dart';
 import 'game/sfx.dart';
+import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/game_service.dart';
 import 'services/progress_service.dart';
 import 'ui/auth_screen.dart';
+import 'ui/continue_overlay.dart';
 import 'ui/game_over_overlay.dart';
 import 'ui/leaderboard_screen.dart';
 import 'ui/loading_screen.dart';
@@ -36,6 +38,12 @@ Future<void> main() async {
   ProgressService.instance.bindLifecycle();
   await AuthService.instance.initialize();
   runApp(const SutVeGolApp());
+  // Reklam onayı (AB/BK formu, iOS izleme izni) ilk kareden sonra; açılışı bekletmez.
+  if (kUiPreview.isEmpty && !kAutoplay) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(AdService.instance.initialize()),
+    );
+  }
 }
 
 /// Uygulama teması (testler ve ekran görüntüleri de aynısını kullanır).
@@ -184,12 +192,17 @@ class _GameScreenState extends State<GameScreen> {
     // hazır olunca açılır (bayrak/eski ilerleme kontrolü oyunda).
     final g = SutVeGolGame()..firstRunTutorial = kUiPreview.isEmpty;
     g.onExit = _exit;
+    g.canContinue = () => AdService.instance.canOfferContinue(
+      score: g.score,
+      usedThisRun: g.continuedThisRun,
+    );
     g.onRunStarted = () {
       _runRecorded = false;
       unawaited(_online.start());
     };
     g.onRunFinished = (run) {
       _recordRun(run);
+      AdService.instance.runFinished();
       unawaited(
         _online.finish(
           score: run.score,
@@ -251,6 +264,7 @@ class _GameScreenState extends State<GameScreen> {
             PauseOverlay(game: game, guest: widget.guest, onDuel: _openDuel),
         kTutorialOverlay: (context, game) =>
             TutorialOverlay(key: ValueKey(game.tutorialSession), game: game),
+        kContinueOverlay: (context, game) => ContinueOverlay(game: game),
       },
     ),
   );

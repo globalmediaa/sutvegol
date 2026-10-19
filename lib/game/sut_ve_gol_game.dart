@@ -44,6 +44,7 @@ const String kStageOverride = String.fromEnvironment('STAGE');
 const String kGameOverOverlay = 'gameOver';
 const String kPauseOverlay = 'pause';
 const String kTutorialOverlay = 'tutorial';
+const String kContinueOverlay = 'continue';
 
 class _Scheduled {
   _Scheduled(this.at, this.fn);
@@ -117,6 +118,20 @@ class SutVeGolGame extends FlameGame {
   int runMaxStreak = 0;
   DateTime _runStartedAt = DateTime.now();
   double _runStartClock = 0;
+
+  /// Son kalp gidince "1 hak daha" (ödüllü reklam) teklif edilsin mi?
+  /// GameScreen bağlar; bağlı değilse (testler, düello) oyun hemen biter.
+  bool Function()? canContinue;
+
+  /// Teklif perdesi açık: koşu henüz bitmedi, skor gönderilmedi.
+  bool awaitingContinue = false;
+  bool _continuedThisRun = false;
+
+  /// Bu koşuda "1 hak daha" kullanıldı mı (koşu başına bir kez).
+  bool get continuedThisRun => _continuedThisRun;
+
+  /// Ödüllü "Kral Modu ile başla": yeni koşunun ilk topunda Kral Modu açılır.
+  bool _feverOnStart = false;
 
   // Seri / Kral Modu.
   int streak = 0;
@@ -234,6 +249,7 @@ class SutVeGolGame extends FlameGame {
     _inbox.clear();
     onShotResolved = null;
     onRunFinished = null;
+    canContinue = null;
     images.clearCache();
     super.onDispose();
   }
@@ -583,6 +599,10 @@ class SutVeGolGame extends FlameGame {
     }
     shotClock = shotClockSeconds;
     if (kFeverTest && !fever) startFever();
+    if (_feverOnStart && state == GameState.idle) {
+      _feverOnStart = false;
+      if (!fever) startFever();
+    }
     if (isReplica) _drainInbox();
     if (_tutorialPending && state == GameState.idle) {
       _tutorialPending = false;
@@ -861,14 +881,59 @@ class SutVeGolGame extends FlameGame {
       _emitRecord(hit: false);
       schedule(0.7, () {
         state = GameState.gameOver;
-        sfx(Sfx.gameOver);
-        if (mode == GameMode.solo) overlays.add(kGameOverOverlay);
-        onRunFinished?.call(runSummary);
+        if (canContinue?.call() ?? false) {
+          awaitingContinue = true;
+          overlays.add(kContinueOverlay);
+          return;
+        }
+        _endRun();
       });
       return;
     }
     _afterShot();
     _emitRecord(hit: false);
+  }
+
+  /// Koşu gerçekten bitti: perde, ses, skor gönderimi.
+  void _endRun() {
+    sfx(Sfx.gameOver);
+    if (mode == GameMode.solo) overlays.add(kGameOverOverlay);
+    onRunFinished?.call(runSummary);
+  }
+
+  /// "1 hak daha" reddedildi ya da süresi doldu: oyun biter.
+  void declineContinue() {
+    if (!awaitingContinue) return;
+    awaitingContinue = false;
+    overlays.remove(kContinueOverlay);
+    _endRun();
+  }
+
+  /// Ödüllü reklam izlendi: 1 kalple aynı skor/sahneden devam (koşu başına bir kez).
+  void continueRun() {
+    if (!awaitingContinue) return;
+    awaitingContinue = false;
+    _continuedThisRun = true;
+    overlays.remove(kContinueOverlay);
+    lives = 1;
+    state = GameState.resolving;
+    _afterShot();
+    _scheduleNextBall(0.35);
+  }
+
+  /// Tam ekran reklam açılıyor: motor ve sahne sesi durur (reklam sesiyle
+  /// çakışmasın); kapanınca [resumeAfterAd].
+  void suspendForAd() {
+    pauseEngine();
+    Sfx.stopFeverLoop();
+    Sfx.stopAmbience();
+  }
+
+  void resumeAfterAd() {
+    if (_disposed) return;
+    resumeEngine();
+    Sfx.startAmbience(stage);
+    if (fever) Sfx.startFeverLoop();
   }
 
   /// Taslaktaki girdi + sonuç + güncel durum → [ShotRecord] → [onShotResolved].
@@ -1144,19 +1209,24 @@ class SutVeGolGame extends FlameGame {
     restart();
   }
 
-  void restart() {
+  /// [feverStart]: ödüllü "Kral Modu ile başla" — ilk top Kral Modu'nda gelir.
+  void restart({bool feverStart = false}) {
     if (isDuel) return;
-    final completed = state == GameState.gameOver;
+    // "1 hak daha" bekleyen koşu henüz gönderilmedi: yarım koşu gibi bitir.
+    final completed = state == GameState.gameOver && !awaitingContinue;
     if (!completed && runShots > 0) onRunFinished?.call(runSummary);
     input.cancelGesture();
     _queue.clear();
     _capture = null;
+    awaitingContinue = false;
+    overlays.remove(kContinueOverlay);
     overlays.remove(kGameOverOverlay);
     overlays.remove(kPauseOverlay);
     score = 0;
     lives = 3;
     streak = 0;
     fever = false;
+    _feverOnStart = feverStart;
     _resetRunStats();
     onRunStarted?.call();
     _pendingStage = null;
@@ -1198,6 +1268,7 @@ class SutVeGolGame extends FlameGame {
     runMisses = 0;
     runFeverHits = 0;
     runMaxStreak = 0;
+    _continuedThisRun = false;
     _recordsEmitted = 0;
     _lastEventRt = 0;
     _lastEventStage = stage.name;

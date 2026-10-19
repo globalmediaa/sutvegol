@@ -15,6 +15,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - `lib/game/led.dart` — 7-segment çizim; hem Flame hem Flutter tarafı kullanır.
 - `lib/game/splash.dart` — gece göğü + Yükleniyor → logo alev iziyle belirir, köz parçacıkları → sahaya pan.
 - `lib/game/sfx.dart` — flame_audio; sahneye göre ambiyans (`amb_<stage>.wav`), Kral Modu döngüsü, efektler.
+- `lib/services/ad_service.dart` — AdMob (google_mobile_ads, 9.0.0'da sabit: 9.1.x iOS'ta `use_frameworks!` ile derlenmiyor): UMP onayı, iOS izleme izni (app_tracking_transparency), ödüllü + geçiş reklamı ön yükleme/yeniden deneme, tam ekran gösterim; `ad_policy.dart` saf sıklık kuralları. `lib/ui/ad_banner.dart` (alt şerit / 300×250 kutu), `continue_overlay.dart` ("BİR ŞANS DAHA" perdesi).
 - `lib/ui/theme.dart` (`FK` paleti: lacivert + turuncu/amber), `logo.dart` (paintLogo/paintCrown — Flame ve Flutter ortak), `widgets.dart` (GlassCard, PillButton (`enabled`), BusyPill, BrandHeader, SocialButton + GoogleMark (koddan çizilen G), SegmentedPill, `gameInput` alan stili, GameBackdrop (bulanık prosedürel sahne zemini, `hud: false`), RoundButton, AvatarCircle (isimden üretilen), ToggleRow, LogoWidget), `auth_screen.dart` (sokak sahnesi önünde cam kart: Apple / Google / e-posta kayıt-giriş, misafir), `username_screen.dart` (sosyal girişten sonra takma ad; ikisinde de Kullanım Koşulları onay kutusu), `moderation_ui.dart` (⋯ Şikâyet et / Engelle, Engellenen oyuncular, `TermsConsent`; servis `lib/services/moderation_service.dart`, sunucu `backend/src/moderation.php`), `game_over_overlay.dart`, `pause_overlay.dart`, `leaderboard_screen.dart`, `profile_dialog.dart`, `loading_screen.dart`, `led_painter.dart`, `mock_data.dart` (yerel liste + 37 rozet).
 - `assets/fonts/` Titillium Web (OFL). `assets/audio/` — `tools/make_audio.py` ile üretilir.
 
@@ -27,6 +28,16 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - **Sahneler:** Sokak 0+, Sahil 300+, Halı Saha 700+, Stadyum 1200+ (`Stage.minScore`). Geçiş bir sonraki topta: geniş kamera, crossfade, "YENİ SAHNE" afişi, fanfar, ambiyans değişimi. Yeniden başlatmada sokağa dönülür.
 - Her şuttan sonra %40 geniş ↔ yakın kamera (aynı sahnenin diğer görünümü).
 - Leaderboard API üzerinden gerçek kullanıcıları ve doğrulanmış skorları gösterir. Avatarlar kullanıcı adından üretilir.
+- Son kalp gidince (tek kişilik, `canContinue` bağlıysa) koşu bitmez: `awaitingContinue` + `kContinueOverlay`. Ödüllü reklam → `continueRun()` (1 kalp, aynı skor/sahne, koşu başına bir kez); "Hayır"/6 sn → `declineContinue()`. `onRunFinished` (skor gönderimi) ancak koşu gerçekten bitince çağrılır.
+
+## Reklamlar (AdMob)
+- Oyun sırasında reklam yok. Tek kişilik ("offline"): son kalpte ödüllü **1 hak daha**; oyun sonunda ödüllü **Kral Moduyla başla** (`restart(feverStart: true)`, 2 koşudan sonra), "TEKRAR OYNA"da geçiş reklamı, altta banner (butonlara yapışmaz; sığmazsa yok); sıralama ekranında alt banner. Düello ("online"): rakip aranırken 300×250 kutu, sonuç ekranından "YENİ RAKİP"/"TEK KİŞİLİK" çıkışında geçiş reklamı (rövanşta yok).
+- Sıklık (`AdPolicy`): ilk 3 koşu geçiş reklamı yok; sonra her 3 koşuda bir; düelloda her 2 maçta bir; iki tam ekran reklam arası ≥ 90 sn (ödüllü dahil). Ödüllü reklam açılamazsa (oyuncunun suçu değil) hak yine verilir; erken kapatılırsa verilmez.
+- Tam ekran reklam sırasında `game.suspendForAd()` / `resumeAfterAd()` motoru ve ambiyansı durdurur.
+- Sunucu doğrulaması (`/v1/games/:id/finish`) kaçırma sayısını can ile sınırlamaz; devam edilen koşu `score_math`'ı bozmaz.
+- AB/BK/İsviçre onayı: UMP formu açılışta; duraklat menüsünde (gerekiyorsa) "Reklam tercihleri". İçerik derecesi T. Reklamlı metinler: `docs/privacy.html`, `docs/terms.html`, mağaza beyanı `store/google-play/listing_tr_en.md`.
+- Kimlikler (yayıncı `pub-5952420054302125`; `docs/app-ads.txt`): mağaza birimleri `AdUnits` (`ad_service.dart`) içinde, **yalnız release** derlemesinde kullanılır; debug/profile ve `--dart-define=ADMOB_TEST=true` Google test birimlerini kullanır (geliştiricinin gerçek reklamı görmesi/tıklaması → hesap kapanır). `--dart-define=ADMOB_REWARDED|ADMOB_INTERSTITIAL|ADMOB_BANNER` koddakinin önüne geçer. Uygulama kimlikleri: iOS `ca-app-pub-5952420054302125~9606206828` (`ios/Flutter/Ads.xcconfig` → Info.plist `GADApplicationIdentifier`), Android `ca-app-pub-5952420054302125~9450721786` (`build.gradle.kts` manifestPlaceholders; `ADMOB_APP_ID` ortam değişkeniyle değişir). `tools/build_android.sh` mağaza birimleriyle paketler.
+- `--dart-define=NO_ADS=true` reklamları kapatır; `AUTOPLAY` ve `UI_PREVIEW` derlemelerinde de başlatılmaz. Testlerde/masaüstünde `AdService.supported` yanlış: teklif yok, banner boş, akış reklamsızla aynı.
 
 ## Geliştirme bayrakları
 - `--dart-define=API_BASE_URL=https://api.alan.tld` → canlı sunucu (varsayılan example.com = yapılandırılmamış).
@@ -35,6 +46,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - `--dart-define=UI_PREVIEW=leaderboard|profile` → ekranı doğrudan açar.
 - `--dart-define=FEVER_TEST=true` → ilk toptan itibaren Kral Modu.
 - `--dart-define=STAGE=beach|cage|stadium` → o sahneden başlar.
+- `--dart-define=NO_ADS=true` → reklamsız (mağaza çekimi / demo). `--dart-define=ADMOB_TEST=true` → release derlemede de Google test reklamları (kendi telefonunda test). AdMob kimlikleri için bkz. **Reklamlar**.
 
 ## Ses
 - Tümü sentez: `python3 tools/make_audio.py` → `assets/audio/` (22.05 kHz mono). Vuruş, isabet çanı, iskalama, yuvarlanma, Kral Modu başla/isabet/bitiş + alev döngüsü, oyun bitti, sayaç, açılış, sahne fanfarı, 4 ambiyans (sokak trafiği / sahil dalgası + martı / gece halı saha / tribün).
@@ -47,7 +59,7 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 ## Test / dağıtım
 - `flutter test` — swipe → şut widget testi.
 - Simülatör: Xcode 27'de `flutter build ios --simulator` iki mimaride `lipo -verify_arch` hatası verir; tek mimari derle: `cd ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator -destination 'id=<UDID>' -derivedDataPath ../build/ios-sim ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build` → `xcrun simctl install booted build/ios-sim/Build/Products/Debug-iphonesimulator/Runner.app` → `xcrun simctl launch booted com.globalmedia.sutVeGol`.
-- Telefon: `flutter run -d 00008140-001059EA14D8801C --release` (Team Y2MWRALQHR).
+- Telefon: `flutter run -d 00008140-001059EA14D8801C --release --dart-define=ADMOB_TEST=true` (Team Y2MWRALQHR). `ADMOB_TEST` olmadan release derleme gerçek reklam gösterir — geliştirici cihazında kullanma; mağaza derlemesinde verme.
 - Android / Google Play: `bash tools/build_android.sh` → `build/play/sut-ve-gol-<sürüm>-<kod>.aab` (yükleme anahtarı repo dışında `~/.android/sutvegol-release/`). Mağaza metinleri, veri güvenliği ve içerik yanıtları `store/google-play/listing_tr_en.md`.
 
 ## Mağaza görselleri
