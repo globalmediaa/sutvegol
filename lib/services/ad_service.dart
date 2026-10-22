@@ -193,8 +193,8 @@ class AdService extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
       await MobileAds.instance.updateRequestConfiguration(
-        // Oyun 13+ için; reklam içeriği "Teen" ile sınırlı.
-        RequestConfiguration(maxAdContentRating: MaxAdContentRating.t),
+        // App Store yaş derecesi 4+: reklam içeriği "G" (genel) ile sınırlı.
+        RequestConfiguration(maxAdContentRating: MaxAdContentRating.g),
       );
       await MobileAds.instance.initialize();
       _ready = true;
