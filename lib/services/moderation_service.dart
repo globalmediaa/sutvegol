@@ -7,6 +7,9 @@ import 'api_client.dart';
 /// (backend/src/moderation.php). Metin değişirse ikisi birlikte artırılır.
 const kTermsVersion = 1;
 const kTermsUrl = 'https://globalmediaa.github.io/sutvegol/terms.html';
+
+/// Gizlilik politikası (App Store Connect'teki Gizlilik Politikası URL'siyle aynı).
+const kPrivacyUrl = 'https://globalmediaa.github.io/apps-privacy/sut-ve-gol/';
 const kSupportEmail = 'info@globalmedia.com.tr';
 
 /// Sunucunun engellenen oyuncu için kullandığı etiket (sıralama, düello).

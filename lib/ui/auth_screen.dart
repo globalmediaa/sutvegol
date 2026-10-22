@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/moderation_service.dart';
 import 'moderation_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -37,7 +38,7 @@ class _AuthScreenState extends State<AuthScreen>
     ..onTap = openTerms;
   late final TapGestureRecognizer _privacyLink = TapGestureRecognizer()
     ..onTap = () => launchUrl(
-      Uri.parse('https://sutvegol.gmgaming.app/privacy'),
+      Uri.parse(kPrivacyUrl),
       mode: LaunchMode.externalApplication,
     );
 

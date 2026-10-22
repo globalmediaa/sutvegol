@@ -310,7 +310,7 @@ class _PauseOverlayState extends State<PauseOverlay>
                   child: const Text('Hesabım'),
                 ),
               TextButton(
-                onPressed: () => _open('https://sutvegol.gmgaming.app/privacy'),
+                onPressed: () => _open(kPrivacyUrl),
                 child: const Text('Gizlilik'),
               ),
               TextButton(
