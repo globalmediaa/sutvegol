@@ -127,3 +127,8 @@ sesler sentezle üretilir; hiçbir görsel/ses dosyası üçüncü taraf kaynakt
 - Play inceleme hesabı üretimde açıldı: `playreview@globalmedia.com.tr` / `PlayReview`, parola `~/.android/sutvegol-release/play-review-account.properties`. Silinmemeli.
 - Açık: AAB fiziksel Android cihazda denenmedi (bağlı cihaz yoktu). 360 dp genişlikte sıralamadaki uzun kullanıcı adları ~9 karakterden sonra kesiliyor.
 
+
+## 22 Ekim 2026: 1.1.0(14) App Store IPA (Claude/Hızır)
+- pubspec 1.1.0+14 (ASC sürüm 1.1, yalnız Türkçe). Uygulama içi Gizlilik bağlantıları (`kPrivacyUrl`, `moderation_service.dart`; giriş ekranı + duraklat menüsü) `https://globalmediaa.github.io/apps-privacy/sut-ve-gol/` adresine alındı; Koşullar `kTermsUrl` aynı kaldı.
+- Xcode'da Apple hesabı yok: otomatik imza "No Accounts" ile düşer. Build 12'deki gibi Runner Release yalnız derleme süresince manual'a (profil "Sut ve Gol App Store SIWA", Apple Distribution) alındı, pbxproj sonra aynen geri konuldu (SHA256 aynı). Komut: `flutter build ipa --release --export-options-plist=<repo dışı plist> --dart-define=GOOGLE_IOS_CLIENT_ID=846087551741-ruqfq3brpl240230chjivp08e04b7ubd.apps.googleusercontent.com` (ADMOB_TEST verilmedi, mağaza birimleri).
+- Doğrulama: Info.plist 1.1.0/14, 18 Mach-O vtool platform IOS, strict codesign, Apple Distribution Y2MWRALQHR, get-task-allow=false, applesignin + game-center. Flutter 113 geçti / 26 atlandı, analyze temiz. IPA `~/Desktop/TF/SutVeGol-1.1.0-14.ipa` (SHA256 03acffe4e809452beeafda795a0723b8033c2bac60bb66422b4f5ec222a361bd). TestFlight/App Store'a yüklenmedi (Samet Transporter ile).
