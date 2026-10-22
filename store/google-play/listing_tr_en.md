@@ -144,7 +144,7 @@ All art and sounds are original to the game. Sound and vibration can be turned o
 `https://sutvegol.gmgaming.app/privacy`
 
 ### Reklamlar
-**Evet**, uygulama reklam içerir (Google AdMob): oyun sonu ve sıralama ekranında banner, düello rakibi aranırken 300×250 kutu, birkaç oyunda bir geçiş reklamı ve isteğe bağlı ödüllü reklamlar ("1 hak daha", "Kral Moduyla başla"). Oyun sırasında reklam yok. Reklam içerik derecesi **T** ile sınırlı (`RequestConfiguration.maxAdContentRating`).
+**Evet**, uygulama reklam içerir (Google AdMob): oyun sonu ve sıralama ekranında banner, düello rakibi aranırken 300×250 kutu, birkaç oyunda bir geçiş reklamı ve isteğe bağlı ödüllü reklamlar ("1 hak daha", "Kral Moduyla başla"). Oyun sırasında reklam yok. Reklam içerik derecesi **G** ile sınırlı (`RequestConfiguration.maxAdContentRating`).
 
 Reklam kimliği beyanı: **Evet** — amaçlar: **Reklam veya pazarlama**, **Analiz**, **Dolandırıcılık önleme ve güvenlik** (AdMob ölçüm ve geçersiz trafik koruması). `com.google.android.gms.permission.AD_ID` izni Google Mobile Ads SDK'sından gelir.
 
